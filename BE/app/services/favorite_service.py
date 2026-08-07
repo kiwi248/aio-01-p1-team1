@@ -1,4 +1,6 @@
 # favorite_service.py
+from datetime import date
+
 from app.core.supabase_config import get_supabase
 from app.schemas.favorite_schema import (
     FavoriteCreate,
@@ -72,18 +74,23 @@ def favorite_ranking() -> list[FavoriteRanking]:
     supabase = get_supabase()
     result = (
         supabase.table("favorites")
-        .select("listing_id, listings(title)")
+        .select("listing_id, listings(title, deadline)")
         .execute()
     )
 
+    today = date.today()
     counts: dict[int, dict] = {}
     for row in result.data:
         listing_id = row["listing_id"]
         listing = row.get("listings") or {}
+        deadline_value = listing.get("deadline")
+        deadline = date.fromisoformat(deadline_value) if deadline_value else None
         if listing_id not in counts:
             counts[listing_id] = {
                 "listing_id": listing_id,
                 "title": listing.get("title", ""),
+                "deadline": deadline,
+                "is_expired": deadline is not None and deadline < today,
                 "favorite_count": 0,
             }
         counts[listing_id]["favorite_count"] += 1

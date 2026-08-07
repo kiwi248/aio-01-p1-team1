@@ -1,5 +1,5 @@
 # favorite_schema.py
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -29,6 +29,8 @@ class FavoriteWithListing(BaseModel):
 class FavoriteRanking(BaseModel):
     listing_id: int
     title: str
+    deadline: date | None = None
+    is_expired: bool
     favorite_count: int
 
 

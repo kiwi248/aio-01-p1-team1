@@ -25,7 +25,7 @@ def create(favorite: FavoriteCreate) -> ApiResponse:
 
     created_favorite = favorite_create(favorite)
     if created_favorite is None:
-        raise HTTPException(status_code=500, detail="즐겨찾기 등록에 실패했습니다.")
+        raise HTTPException(status_code=404, detail="즐겨찾기 등록된 게 없습니다")
     return ApiResponse(
         success=True,
         message="즐겨찾기에 등록되었습니다.",
@@ -53,7 +53,7 @@ def delete(user_id: str, listing_id: int) -> ApiResponse:
 
     deleted_favorite = favorite_delete(user_id, listing_id)
     if deleted_favorite is None:
-        raise HTTPException(status_code=500, detail="즐겨찾기 삭제에 실패했습니다.")
+        raise HTTPException(status_code=404, detail="즐겨찾기 삭제에 실패했습니다.")
     return ApiResponse(
         success=True,
         message="즐겨찾기가 삭제되었습니다.",

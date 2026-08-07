@@ -23,14 +23,33 @@ try:
     if not ranking:
         st.info("즐겨찾기 데이터가 없습니다.")
     else:
-        st.caption(f"총 {len(ranking)}건")
-        df = pd.DataFrame(ranking).rename(
+        status_filter = st.selectbox("공고 상태", ["전체", "진행 중", "만료"])
+
+        df = pd.DataFrame(ranking)
+        df["상태"] = df["is_expired"].map({False: "진행 중", True: "만료"})
+        df = df.rename(
             columns={
                 "listing_id": "청약 ID",
                 "title": "공고명",
+                "deadline": "마감일",
                 "favorite_count": "즐겨찾기 수",
             }
-        )
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        ).drop(columns=["is_expired"])
+
+        if status_filter != "전체":
+            df = df[df["상태"] == status_filter]
+
+        if df.empty:
+            st.info(f"{status_filter} 상태의 즐겨찾기 데이터가 없습니다.")
+        else:
+            st.caption(f"총 {len(df)}건")
+
+            def fade_expired(row):
+                if row["상태"] == "만료":
+                    return ["color: #9ca3af; background-color: #f3f4f6"] * len(row)
+                return [""] * len(row)
+
+            styled_df = df.style.apply(fade_expired, axis=1)
+            st.dataframe(styled_df, use_container_width=True, hide_index=True)
 except BackendAPIError as error:
     st.error(str(error))
