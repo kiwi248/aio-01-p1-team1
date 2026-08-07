@@ -60,6 +60,9 @@ try:
                 if listing.get("description"):
                     st.write(listing["description"])
 
+                if listing.get("source_url"):
+                    st.link_button("공고 원문 보기", listing["source_url"])
+
                 if is_logged_in():
                     if st.button("즐겨찾기 추가", key=f"favorite-add-{listing['id']}"):
                         result = create_favorite(st.session_state.user_id, listing["id"])

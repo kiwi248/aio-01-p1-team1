@@ -63,6 +63,9 @@ try:
                 if listing.get("description"):
                     st.write(listing["description"])
 
+                if listing.get("source_url"):
+                    st.link_button("공고 원문 보기", listing["source_url"])
+
                 delete_confirmed = st.checkbox(
                     "삭제한 청약정보는 복구할 수 없습니다. 삭제에 동의합니다.",
                     key=f"delete-confirm-{listing['id']}",

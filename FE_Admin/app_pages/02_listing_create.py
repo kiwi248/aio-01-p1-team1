@@ -22,6 +22,7 @@ with st.form("listing_create_form", clear_on_submit=True):
     announced_at = st.date_input("공고일")
     deadline = st.date_input("마감일")
     description = st.text_area("상세 설명")
+    source_url = st.text_input("공고 원문 링크 (선택)", placeholder="예: https://apply.lh.or.kr/...")
     submitted = st.form_submit_button("등록", type="primary")
 
 if submitted:
@@ -37,6 +38,7 @@ if submitted:
             "announced_at": announced_at.isoformat(),
             "deadline": deadline.isoformat(),
             "description": description.strip() or None,
+            "source_url": source_url.strip() or None,
         }
         try:
             result = create_listing(payload)
