@@ -17,24 +17,6 @@ if not is_logged_in():
     st.warning("로그인이 필요합니다.")
     st.stop()
 
-# 이미지는 미리보기를 바로 보여주기 위해 폼 밖에 둡니다.
-# st.form 안의 위젯은 등록 버튼을 눌러야 값이 전달되어 미리보기를 만들 수 없습니다.
-image_file = st.file_uploader(
-    "이미지 (선택, 최대 5MB)",
-    type=["jpg", "jpeg", "png", "webp"],
-)
-
-image_too_large = False
-if image_file is not None:
-    if image_file.size > MAX_IMAGE_SIZE:
-        image_too_large = True
-        st.error(
-            f"이미지 크기는 5MB를 넘을 수 없습니다. "
-            f"(선택한 파일: {image_file.size / 1024 / 1024:.1f}MB)"
-        )
-    else:
-        st.image(image_file, width=300)
-
 with st.form("listing_create_form", clear_on_submit=True):
     title = st.text_input("공고 제목")
     housing_name = st.text_input("주택명")
@@ -51,6 +33,10 @@ with st.form("listing_create_form", clear_on_submit=True):
     application_start_date = st.date_input("신청 시작일")
     application_end_date = st.date_input("신청 종료일")
     description = st.text_area("상세 설명")
+    image_file = st.file_uploader(
+        "이미지 (선택, 최대 5MB)",
+        type=["jpg", "jpeg", "png", "webp"],
+    )
     source_url = st.text_input("원문 URL", placeholder="예: https://apply.lh.or.kr/...")
     submitted = st.form_submit_button("등록", type="primary")
 
@@ -65,8 +51,12 @@ if submitted:
         st.error("공고 제목, 주택명, 자치구, 상세 설명, 원문 URL을 모두 입력해 주세요.")
     elif application_end_date < application_start_date:
         st.error("신청 종료일은 신청 시작일보다 빠를 수 없습니다.")
-    elif image_too_large:
-        st.error("이미지 크기를 5MB 이하로 줄이거나 이미지를 빼고 등록해 주세요.")
+    elif image_file is not None and image_file.size > MAX_IMAGE_SIZE:
+        st.error(
+            f"이미지 크기는 5MB를 넘을 수 없습니다. "
+            f"(선택한 파일: {image_file.size / 1024 / 1024:.1f}MB) "
+            f"크기를 줄이거나 이미지를 빼고 등록해 주세요."
+        )
     else:
         payload = {
             "title": title.strip(),
