@@ -47,6 +47,20 @@ password = st.text_input(
     placeholder="비밀번호를 입력해 주세요.",
 )
 
+st.markdown(
+    """
+    <style>
+    [data-testid="stMain"] a[data-testid="stPageLink-NavLink"] {
+        background-color: var(--secondary-background-color, #f0f2f6);
+        border-radius: 0.5rem;
+        justify-content: center;
+        min-height: 2.5rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 button_col1, button_col2 = st.columns(2)
 
 with button_col1:
