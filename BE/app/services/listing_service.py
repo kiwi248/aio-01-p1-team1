@@ -6,22 +6,13 @@ from app.schemas.listing_schema import ListingCreate, ListingPublic
 def listing_create(listing: ListingCreate) -> ListingPublic | None:
     supabase = get_supabase()
 
+    # mode="json"으로 바꾸면 date는 "2026-08-07", Decimal은 "39.72" 같은
+    # 문자열이 되어 Supabase가 그대로 받을 수 있습니다.
+    listing_data = listing.model_dump(mode="json")
+
     result = (
         supabase.table("listings")
-        .insert(
-            {
-                "title": listing.title,
-                "type": listing.type,
-                "location": listing.location,
-                "price": listing.price,
-                "eligibility": listing.eligibility,
-                "image_url": listing.image_url,
-                "source_url": listing.source_url,
-                "announced_at": listing.announced_at.isoformat() if listing.announced_at else None,
-                "deadline": listing.deadline.isoformat() if listing.deadline else None,
-                "description": listing.description,
-            }
-        )
+        .insert(listing_data)
         .execute()
     )
     if not result.data:
@@ -34,7 +25,7 @@ def listing_get_all() -> list[ListingPublic]:
     result = (
         supabase.table("listings")
         .select("*")
-        .order("announced_at", desc=True)
+        .order("application_start_date", desc=True)
         .execute()
     )
     return [ListingPublic.model_validate(item) for item in result.data]
@@ -54,27 +45,21 @@ def listing_get(listing_id: int) -> ListingPublic | None:
 
 
 def listing_search(
-    type: str | None,
     location: str | None,
-    min_price: int | None,
-    max_price: int | None,
-    eligibility: str | None,
+    max_deposit: int | None,
+    max_monthly_rent: int | None,
 ) -> list[ListingPublic]:
     supabase = get_supabase()
     query = supabase.table("listings").select("*")
 
-    if type:
-        query = query.eq("type", type)
     if location:
         query = query.ilike("location", f"%{location}%")
-    if min_price is not None:
-        query = query.gte("price", min_price)
-    if max_price is not None:
-        query = query.lte("price", max_price)
-    if eligibility:
-        query = query.ilike("eligibility", f"%{eligibility}%")
+    if max_deposit is not None:
+        query = query.lte("deposit", max_deposit)
+    if max_monthly_rent is not None:
+        query = query.lte("monthly_rent", max_monthly_rent)
 
-    result = query.order("announced_at", desc=True).execute()
+    result = query.order("application_start_date", desc=True).execute()
     return [ListingPublic.model_validate(item) for item in result.data]
 
 

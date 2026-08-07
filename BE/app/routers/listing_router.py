@@ -20,21 +20,17 @@ def get_all() -> ApiResponse:
     )
 
 
-# 2. 조건검색 (최신순, 대상, 위치, 금액, 자격조건)
+# 2. 조건검색 (최신순, 위치, 최대 보증금, 최대 월세)
 @listing_router.get("/search")
 def search(
-    type: str | None = Query(default=None),
     location: str | None = Query(default=None),
-    min_price: int | None = Query(default=None, ge=0),
-    max_price: int | None = Query(default=None, ge=0),
-    eligibility: str | None = Query(default=None),
+    max_deposit: int | None = Query(default=None, ge=0),
+    max_monthly_rent: int | None = Query(default=None, ge=0),
 ) -> ApiResponse:
     listings = listing_search(
-        type=type,
         location=location,
-        min_price=min_price,
-        max_price=max_price,
-        eligibility=eligibility,
+        max_deposit=max_deposit,
+        max_monthly_rent=max_monthly_rent,
     )
     return ApiResponse(
         success=True,

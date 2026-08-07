@@ -6,6 +6,7 @@ from clients.favorite_client import create_favorite
 from clients.listing_client import get_listings, search_listings
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
+from core.constants import SEOUL_DISTRICTS
 
 
 st.title("청약정보 조회")
@@ -15,22 +16,20 @@ if message := st.session_state.pop("listing_message", None):
 
 with st.expander("조건검색"):
     with st.form("listing_search_form"):
-        search_type = st.text_input("대상", placeholder="예: 공공임대")
-        search_location = st.text_input("위치", placeholder="예: 강남구")
-        search_min_price = st.number_input("최소 금액", min_value=0, step=1000000, value=0)
-        search_max_price = st.number_input("최대 금액", min_value=0, step=1000000, value=0)
-        search_eligibility = st.text_input("자격 조건", placeholder="예: 무주택")
+        search_location = st.selectbox("서울 자치구", ("전체",) + SEOUL_DISTRICTS)
+        search_max_deposit = st.number_input("최대 보증금", min_value=0, step=10000, value=0)
+        search_max_monthly_rent = st.number_input("최대 월세", min_value=0, step=10000, value=0)
         search_submitted = st.form_submit_button("검색")
 
 try:
     if search_submitted:
-        params = {
-            "type": search_type.strip() or None,
-            "location": search_location.strip() or None,
-            "min_price": int(search_min_price) or None,
-            "max_price": int(search_max_price) or None,
-            "eligibility": search_eligibility.strip() or None,
-        }
+        params = {}
+        if search_location != "전체":
+            params["location"] = search_location
+        if int(search_max_deposit) > 0:
+            params["max_deposit"] = int(search_max_deposit)
+        if int(search_max_monthly_rent) > 0:
+            params["max_monthly_rent"] = int(search_max_monthly_rent)
         with st.spinner("검색 중..."):
             response = search_listings(params)
     else:
@@ -47,15 +46,23 @@ try:
         for listing in listings:
             with st.container(border=True):
                 st.subheader(listing.get("title") or "제목 없음")
+                if listing.get("image_url"):
+                    st.image(listing["image_url"], width=300)
                 st.write(
-                    f"대상: {listing.get('type') or '-'}  |  "
-                    f"위치: {listing.get('location') or '-'}  |  "
-                    f"금액: {int(listing.get('price') or 0):,}원"
+                    f"주택명: {listing.get('housing_name') or '-'}  |  "
+                    f"자치구: {listing.get('location') or '-'}"
                 )
-                st.write(f"자격 조건: {listing.get('eligibility') or '-'}")
+                st.write(
+                    f"면적: {listing.get('area_sqm') or '-'}㎡  |  "
+                    f"모집 인원: {listing.get('recruitment_count') or '-'}명"
+                )
+                st.write(
+                    f"보증금: {int(listing.get('deposit') or 0):,}원  |  "
+                    f"월세: {int(listing.get('monthly_rent') or 0):,}원"
+                )
                 st.caption(
-                    f"공고일: {listing.get('announced_at') or '-'}  |  "
-                    f"마감일: {listing.get('deadline') or '-'}"
+                    f"신청 기간: {listing.get('application_start_date') or '-'} ~ "
+                    f"{listing.get('application_end_date') or '-'}"
                 )
                 if listing.get("description"):
                     st.write(listing["description"])
