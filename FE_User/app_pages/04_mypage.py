@@ -1,11 +1,22 @@
 # 04_mypage.py
 
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
 import streamlit as st
 
 from clients.favorite_client import delete_favorite, get_mypage_favorites
 from clients.profile_client import get_profile, update_profile
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
+
+
+def is_expired_listing(deadline: str | None) -> bool:
+    if deadline is None:
+        return False
+
+    today = datetime.now(ZoneInfo("Asia/Seoul")).date()
+    return date.fromisoformat(deadline) < today
 
 
 st.title("My Page")
@@ -47,13 +58,22 @@ try:
 
         for favorite in favorites:
             listing = favorite.get("listing") or {}
+            title = listing.get("title") or "제목 없음"
+            listing_info = (
+                f"대상: {listing.get('type') or '-'}  |  "
+                f"위치: {listing.get('location') or '-'}  |  "
+                f"금액: {int(listing.get('price') or 0):,}원"
+            )
+            expired = is_expired_listing(listing.get("deadline"))
+
             with st.container(border=True):
-                st.write(f"**{listing.get('title') or '제목 없음'}**")
-                st.write(
-                    f"대상: {listing.get('type') or '-'}  |  "
-                    f"위치: {listing.get('location') or '-'}  |  "
-                    f"금액: {int(listing.get('price') or 0):,}원"
-                )
+                if expired:
+                    st.caption(f"마감 · {title}")
+                    st.caption(listing_info)
+                else:
+                    st.write(f"**{title}**")
+                    st.write(listing_info)
+
                 if st.button(
                     "즐겨찾기 삭제",
                     key=f"favorite-delete-{favorite['listing_id']}",
