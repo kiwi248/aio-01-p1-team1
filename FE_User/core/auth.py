@@ -16,14 +16,29 @@ def init_state(
     st.session_state.setdefault("email", stored_email)
 
 
-def sign_up(email: str, password: str, nickname: str) -> None:
+def sign_up(
+    email: str,
+    password: str,
+    nickname: str,
+    phone: str,
+    birth_date: str,
+    interests: list[str],
+) -> None:
     supabase = get_supabase()
+
     try:
         result = supabase.auth.sign_up(
             {
                 "email": email,
                 "password": password,
-                "options": {"data": {"nickname": nickname}},
+                "options": {
+                    "data": {
+                        "nickname": nickname,
+                        "phone": phone,
+                        "birth_date": birth_date,
+                        "interests": interests,
+                    }
+                },
             }
         )
     except AuthApiError as error:
