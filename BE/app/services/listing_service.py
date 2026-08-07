@@ -32,20 +32,8 @@ def listing_create(listing: ListingCreate) -> ListingPublic | None:
     return ListingPublic.model_validate(result.data[0])
 
 
-def listing_deadline() -> None:
-    supabase = get_supabase()
-    today = datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
-
-    (
-        supabase.table("listings")
-        .delete()
-        .lt("deadline", today)
-        .execute()
-    )
-
-
 def listing_get_all() -> list[ListingPublic]:
-    listing_deadline()
+ 
 
     supabase = get_supabase()
     result = (
@@ -58,7 +46,7 @@ def listing_get_all() -> list[ListingPublic]:
 
 
 def listing_get(listing_id: int) -> ListingPublic | None:
-    listing_deadline()
+  
 
     supabase = get_supabase()
     result = (
