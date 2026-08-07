@@ -28,8 +28,21 @@ def listing_create(listing: ListingCreate) -> ListingPublic | None:
         return None
     return ListingPublic.model_validate(result.data[0])
 
+def listing_deadline(listing_id: int) -> ListingPublic | None:
+    supabase = get_supabase()
+    result = (
+        supabase.table("listings")
+        .delete()
+        .eq("id", listing_id)
+        .execute()
+    )
+    if not result.data:
+        return None
+    return ListingPublic.model_validate(result.data[0])
 
 def listing_get_all() -> list[ListingPublic]:
+    listing_deadline()
+
     supabase = get_supabase()
     result = (
         supabase.table("listings")
@@ -41,6 +54,8 @@ def listing_get_all() -> list[ListingPublic]:
 
 
 def listing_get(listing_id: int) -> ListingPublic | None:
+    listing_deadline()
+    
     supabase = get_supabase()
     result = (
         supabase.table("listings")
