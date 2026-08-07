@@ -7,6 +7,17 @@ def create_listing(listing: dict[str, Any]):
     return request("POST", "/admin/listings/create", json=listing)
 
 
+def upload_listing_image(image: Any):
+    files = {
+        "image": (
+            image.name,
+            image.getvalue(),
+            image.type or "application/octet-stream",
+        )
+    }
+    return request("POST", "/admin/listings/images", files=files)
+
+
 def get_listings():
     return request("GET", "/listings/getall")
 
