@@ -1,4 +1,7 @@
 # listing_service.py
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from app.core.supabase_config import get_supabase
 from app.schemas.listing_schema import ListingCreate, ListingPublic
 
@@ -28,17 +31,18 @@ def listing_create(listing: ListingCreate) -> ListingPublic | None:
         return None
     return ListingPublic.model_validate(result.data[0])
 
-def listing_deadline(listing_id: int) -> ListingPublic | None:
+
+def listing_deadline() -> None:
     supabase = get_supabase()
-    result = (
+    today = datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
+
+    (
         supabase.table("listings")
         .delete()
-        .eq("id", listing_id)
+        .lt("deadline", today)
         .execute()
     )
-    if not result.data:
-        return None
-    return ListingPublic.model_validate(result.data[0])
+
 
 def listing_get_all() -> list[ListingPublic]:
     listing_deadline()
@@ -55,7 +59,7 @@ def listing_get_all() -> list[ListingPublic]:
 
 def listing_get(listing_id: int) -> ListingPublic | None:
     listing_deadline()
-    
+
     supabase = get_supabase()
     result = (
         supabase.table("listings")
