@@ -1,9 +1,9 @@
 # log_store.py
 """실시간 로그를 메모리에 저장하는 buffer와, 로그를 계속 만들어내는 시뮬레이터입니다.
 
-DB를 쓰지 않고 collections.deque(maxlen=N)에 최근 로그만 들고 있습니다.
-서버가 재시작되면 로그는 사라집니다. Render 무료 티어는 파일로 저장해도 재시작 시
-초기화되므로, 이 데모에서는 메모리에 두는 것과 실질적인 차이가 없습니다.
+collections.deque(maxlen=N)에 최근 로그만 들고 있다가 대시보드 폴링에 응답합니다.
+서버가 재시작되면 buffer는 사라집니다. 다만 warning/error 로그는 나중에 다시 볼 수 있도록
+Supabase logs 테이블에도 남깁니다 (info는 메모리에만 유지).
 """
 
 import random
@@ -12,8 +12,13 @@ import time
 from collections import deque
 from datetime import datetime, timezone
 
+from app.core.supabase_config import get_supabase
+
 MAX_LOGS = 200
 SIMULATE_INTERVAL_SECONDS = 2
+
+# DB에 영구 저장할 레벨입니다. info는 양이 많고 다시 볼 필요가 적어 메모리에만 둡니다.
+DB_PERSIST_LEVELS = {"warning", "error"}
 
 LEVELS = ["info", "warning", "error"]
 SCREENS = ["Listing", "Favorite", "Login", "Signup", "MyPage"]
@@ -29,7 +34,7 @@ _lock = threading.Lock()
 
 
 def add_log(level: str, screen: str, message: str, latency_ms: int) -> None:
-    """로그 한 줄을 buffer에 추가합니다."""
+    """로그 한 줄을 buffer에 추가합니다. warning/error는 DB에도 저장합니다."""
 
     entry = {
         "time": datetime.now(timezone.utc).isoformat(),
@@ -40,6 +45,23 @@ def add_log(level: str, screen: str, message: str, latency_ms: int) -> None:
     }
     with _lock:
         _log_buffer.append(entry)
+
+    if level in DB_PERSIST_LEVELS:
+        _save_to_db(entry)
+
+
+def _save_to_db(entry: dict) -> None:
+    """warning/error 로그를 Supabase logs 테이블에 저장합니다.
+
+    시뮬레이터는 백그라운드 스레드에서 계속 돌아야 하므로, DB 저장이 실패해도
+    (Supabase 설정 누락, 네트워크 오류 등) 예외를 밖으로 던지지 않고 무시합니다.
+    """
+
+    try:
+        get_supabase().table("logs").insert(entry).execute()
+    except Exception as error:
+        # 시뮬레이터 스레드는 계속 돌아야 하므로 예외를 삼키되, 원인 파악을 위해 출력은 남깁니다.
+        print(f"[log_store] Supabase 저장 실패: {error}")
 
 
 def get_logs(level: str | None, limit: int) -> list[dict]:
