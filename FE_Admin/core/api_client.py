@@ -18,6 +18,7 @@ def request(
     path: str,
     json: dict[str, Any] | None = None,
     params: dict[str, Any] | None = None,
+    files: dict[str, Any] | None = None,
 ):
     if params is not None:
         # httpx가 None 값을 빈 문자열로 보내면 백엔드 쿼리 파라미터 검증이 실패하므로 제거합니다.
@@ -29,6 +30,7 @@ def request(
             f"{BACKEND_URL}{path}",
             json=json,
             params=params,
+            files=files,
             timeout=REQUEST_TIMEOUT,
         )
     except httpx.TimeoutException as error:

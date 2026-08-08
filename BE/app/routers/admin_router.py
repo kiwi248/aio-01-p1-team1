@@ -1,11 +1,14 @@
 # admin_router.py
-from fastapi import APIRouter, HTTPException, Query
+from typing import Annotated
+
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
 from app.core.api_response import ApiResponse
 from app.schemas.admin_schema import AdminLogin
 from app.schemas.listing_schema import ListingCreate
 from app.services.admin_service import admin_login_process
 from app.services.favorite_service import favorite_detail, favorite_ranking
+from app.services.image_service import upload_listing_image
 from app.services.listing_service import listing_create, listing_delete, listing_get
 
 admin_router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -39,7 +42,20 @@ def create_listing(listing: ListingCreate) -> ApiResponse:
     )
 
 
-# 3. 청약정보 삭제
+# 3. 청약정보 이미지 업로드
+@admin_router.post("/listings/images")
+async def create_listing_image(
+    image: Annotated[UploadFile, File()],
+) -> ApiResponse:
+    image_url = await upload_listing_image(image)
+    return ApiResponse(
+        success=True,
+        message="이미지를 업로드했습니다.",
+        data={"image_url": image_url},
+    )
+
+
+# 4. 청약정보 삭제
 @admin_router.delete("/listings/delete/{listing_id}")
 def delete_listing(listing_id: int) -> ApiResponse:
     current_listing = listing_get(listing_id)
@@ -56,7 +72,7 @@ def delete_listing(listing_id: int) -> ApiResponse:
     )
 
 
-# 4. 즐겨찾기 많은 순 조회
+# 5. 즐겨찾기 많은 순 조회
 @admin_router.get("/favorites/ranking")
 def get_favorite_ranking() -> ApiResponse:
     ranking = favorite_ranking()
@@ -67,7 +83,7 @@ def get_favorite_ranking() -> ApiResponse:
     )
 
 
-# 5. 어떤 유저가 어떤 청약정보를 즐겨찾기했는지 조회
+# 6. 어떤 유저가 어떤 청약정보를 즐겨찾기했는지 조회
 @admin_router.get("/favorites/detail")
 def get_favorite_detail(listing_id: int | None = Query(default=None)) -> ApiResponse:
     details = favorite_detail(listing_id)
