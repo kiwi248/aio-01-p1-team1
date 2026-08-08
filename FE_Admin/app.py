@@ -20,6 +20,7 @@ listing_create_page = st.Page("app_pages/02_listing_create.py", title="청약정
 listing_manage_page = st.Page("app_pages/03_listing_manage.py", title="청약정보 조회/삭제", icon="📋")
 favorite_ranking_page = st.Page("app_pages/04_favorite_ranking.py", title="즐겨찾기 순위", icon="⭐")
 favorite_detail_page = st.Page("app_pages/05_favorite_detail.py", title="즐겨찾기 상세", icon="🔍")
+log_dashboard_page = st.Page("app_pages/06_log_dashboard.py", title="로그 대시보드", icon="📊")
 
 
 if is_logged_in():
@@ -29,6 +30,7 @@ if is_logged_in():
         listing_manage_page,
         favorite_ranking_page,
         favorite_detail_page,
+        log_dashboard_page,
     ]
 else:
     pages = [home_page, login_page]
@@ -44,6 +46,7 @@ with st.sidebar:
         st.page_link(listing_manage_page)
         st.page_link(favorite_ranking_page)
         st.page_link(favorite_detail_page)
+        st.page_link(log_dashboard_page)
 
         st.divider()
         st.caption(f"{st.session_state.admin_username} 님 로그인 중")
