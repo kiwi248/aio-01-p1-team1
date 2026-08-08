@@ -1,10 +1,22 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
+from app.core.log_store import start_simulator_thread
 from app.exceptions.handlers import register_exception_handlers
 from app.routers.admin_router import admin_router
 from app.routers.favorite_router import favorite_router
 from app.routers.listing_router import listing_router
+from app.routers.log_router import log_router
 from app.routers.profile_router import profile_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 서버가 시작될 때 로그 시뮬레이터를 백그라운드 스레드로 한 번만 띄웁니다.
+    start_simulator_thread()
+    yield
+
 
 # Swagger 문서(/docs)에 표시할 API 그룹 설명입니다.
 tags_metadata = [
@@ -24,9 +36,17 @@ tags_metadata = [
         "name": "Favorite",
         "description": "mypage 즐겨찾기 등록/조회/삭제",
     },
+    {
+        "name": "Log",
+        "description": "실시간 로그 대시보드용 조회 API (메모리 buffer, DB 미사용)",
+    },
 ]
 
-app = FastAPI(title="공공임대 청약 통합 안내 서비스", openapi_tags=tags_metadata)
+app = FastAPI(
+    title="공공임대 청약 통합 안내 서비스",
+    openapi_tags=tags_metadata,
+    lifespan=lifespan,
+)
 
 register_exception_handlers(app)
 
@@ -34,3 +54,4 @@ app.include_router(admin_router)
 app.include_router(profile_router)
 app.include_router(listing_router)
 app.include_router(favorite_router)
+app.include_router(log_router)
