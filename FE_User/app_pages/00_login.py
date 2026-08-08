@@ -81,15 +81,28 @@ if login_clicked:
     clean_password = password.strip()
 
     if not clean_email_id:
-        st.error("이메일 아이디를 입력해 주세요.")
+        login_area.error("이메일 아이디를 입력해 주세요.")
+
     elif not clean_domain:
-        st.error("이메일 주소를 입력해 주세요.")
+        login_area.error("이메일 주소를 입력해 주세요.")
+
     elif "@" in clean_email_id:
-        st.error("@ 앞부분만 입력해 주세요.")
+        login_area.error("@ 앞부분만 입력해 주세요.")
+
     elif not clean_password:
-        st.error("비밀번호를 입력해 주세요.")
+        login_area.error("비밀번호를 입력해 주세요.")
+
     else:
         full_email = f"{clean_email_id}@{clean_domain}"
 
-        with st.spinner("로그인 진행 중..."):
-            login(full_email, clean_password)
+        with login_area:
+            with st.spinner("로그인 진행 중..."):
+                login_success = login(
+                    full_email,
+                    clean_password,
+                )
+
+        if not login_success:
+            login_area.error(
+                "로그인 정보를 다시 확인해 주세요. (401)"
+            )
