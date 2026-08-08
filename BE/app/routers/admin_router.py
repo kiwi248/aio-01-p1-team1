@@ -8,7 +8,7 @@ from app.schemas.admin_schema import AdminLogin
 from app.schemas.listing_schema import ListingCreate
 from app.services.admin_service import admin_login_process
 from app.services.favorite_service import favorite_detail, favorite_ranking
-from app.services.image_service import upload_listing_image
+from app.services.image_service import delete_listing_image, upload_listing_image
 from app.services.listing_service import listing_create, listing_delete, listing_get
 
 admin_router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -65,6 +65,10 @@ def delete_listing(listing_id: int) -> ApiResponse:
     deleted_listing = listing_delete(listing_id)
     if deleted_listing is None:
         raise HTTPException(status_code=500, detail="청약정보 삭제에 실패했습니다.")
+
+    # 공고를 지운 뒤 Storage에 남은 이미지 파일도 함께 지웁니다.
+    delete_listing_image(current_listing.image_url)
+
     return ApiResponse(
         success=True,
         message="청약정보가 삭제되었습니다.",

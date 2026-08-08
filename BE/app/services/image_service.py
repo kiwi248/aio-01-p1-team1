@@ -91,3 +91,32 @@ async def upload_listing_image(image: UploadFile) -> str:
     #    supabase-py는 URL 끝에 빈 물음표를 붙이므로 떼어내고 저장합니다.
     public_url = supabase.storage.from_(STORAGE_BUCKET).get_public_url(storage_path)
     return public_url.rstrip("?")
+
+
+def delete_listing_image(image_url: str | None) -> None:
+    """Storage에 올린 이미지를 지웁니다.
+
+    공고를 지우거나 이미지를 바꿀 때 예전 파일이 남지 않게 합니다.
+    """
+
+    if not image_url:
+        return
+
+    # 우리 버킷에 올린 이미지가 아니면 건드리지 않습니다.
+    # 나중에 다른 사이트의 이미지 주소를 그대로 저장하는 경우를 대비한 안전장치입니다.
+    bucket_marker = f"/{STORAGE_BUCKET}/"
+    if bucket_marker not in image_url:
+        return
+
+    # URL 뒤쪽에서 파일 이름만 잘라냅니다.
+    # .../listing-images/abc123.png -> abc123.png
+    storage_path = image_url.split(bucket_marker, 1)[1].split("?")[0]
+    if not storage_path:
+        return
+
+    # 이미 DB에서 지운 뒤에 호출되므로, 파일 삭제가 실패해도 요청은 실패시키지 않습니다.
+    # 다만 조용히 넘기면 문제를 발견할 수 없으므로 서버 로그에는 남깁니다.
+    try:
+        get_supabase().storage.from_(STORAGE_BUCKET).remove([storage_path])
+    except Exception as error:
+        print(f"[image_service] 이미지 삭제 실패: {storage_path} ({type(error).__name__}: {error})")
