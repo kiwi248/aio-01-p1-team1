@@ -40,6 +40,8 @@ with st.sidebar:
         st.button("LOGOUT", on_click=logout, use_container_width=True)
     else:
         st.page_link(login_page)
-        st.page_link(signup_page)
+        
 
 navigation.run()
+
+

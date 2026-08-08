@@ -16,3 +16,5 @@ __pycache__/
 .vscode/*
 !.vscode/
 !.vscode/settings.json
+CODEX_HANDOFF.md
+login-layout-preview.html
