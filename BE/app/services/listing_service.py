@@ -20,6 +20,23 @@ def listing_create(listing: ListingCreate) -> ListingPublic | None:
     return ListingPublic.model_validate(result.data[0])
 
 
+def listing_update(listing_id: int, listing: ListingCreate) -> ListingPublic | None:
+    supabase = get_supabase()
+
+    # 등록과 같은 방식으로 date와 Decimal을 Supabase가 받을 수 있는 값으로 바꿉니다.
+    listing_data = listing.model_dump(mode="json")
+
+    result = (
+        supabase.table("listings")
+        .update(listing_data)
+        .eq("id", listing_id)
+        .execute()
+    )
+    if not result.data:
+        return None
+    return ListingPublic.model_validate(result.data[0])
+
+
 def listing_get_all() -> list[ListingPublic]:
     supabase = get_supabase()
     result = (
