@@ -14,6 +14,7 @@ from clients.listing_client import (
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
 from core.constants import SEOUL_DISTRICTS
+from core.page_params import build_params, parse_edit_id, parse_page
 
 
 # 이미지 크기 제한입니다. 백엔드에서도 같은 값으로 다시 검사합니다.
@@ -31,9 +32,19 @@ if not is_logged_in():
 if message := st.session_state.pop("listing_message", None):
     st.success(message)
 
-# 현재 보고 있는 페이지 번호를 기억합니다.
-if "listing_page" not in st.session_state:
-    st.session_state.listing_page = 1
+# 지금 보고 있는 페이지와 수정 중인 공고는 주소창(query parameter)에 둡니다.
+# st.session_state에 두면 브라우저를 새로고침할 때 사라지기 때문입니다.
+# 로그인 정보는 여기 넣지 않습니다. 그건 Session Storage가 따로 맡습니다.
+current_page = parse_page(st.query_params.get_all("page"))
+current_edit_id = parse_edit_id(st.query_params.get_all("edit_id"))
+
+# "page=abc"나 "edit_id=-1"처럼 이상한 값이 들어오면 위에서 안전한 값으로 바꿉니다.
+# 주소창도 그 값으로 정리해 두어야 다시 새로고침해도 같은 화면이 나옵니다.
+# 한 번 정리하면 값이 같아지므로 화면이 반복해서 다시 실행되지 않습니다.
+_canonical_params = build_params(current_page, current_edit_id)
+if st.query_params.to_dict() != _canonical_params:
+    st.query_params.from_dict(_canonical_params)
+    st.rerun()
 
 
 def to_date(value: str | None) -> date:
@@ -45,8 +56,19 @@ def to_date(value: str | None) -> date:
 
 def go_to_page(page: int) -> None:
     """페이지를 옮깁니다. 열려 있던 수정 폼은 닫습니다."""
-    st.session_state.listing_page = page
-    st.session_state.pop("edit_listing_id", None)
+    st.query_params.from_dict(build_params(page))
+    st.rerun()
+
+
+def open_edit(listing_id: int) -> None:
+    """수정 화면을 엽니다. 보고 있던 페이지 번호는 그대로 둡니다."""
+    st.query_params.from_dict(build_params(current_page, listing_id))
+    st.rerun()
+
+
+def close_edit() -> None:
+    """수정 화면을 닫고 목록으로 돌아갑니다. 페이지 번호는 유지합니다."""
+    st.query_params.from_dict(build_params(current_page))
     st.rerun()
 
 
@@ -79,7 +101,7 @@ def show_listing_list() -> None:
         page = total_pages = total_count = None
     else:
         with st.spinner("불러오는 중..."):
-            response = get_listings_page(st.session_state.listing_page, PAGE_SIZE)
+            response = get_listings_page(current_page, PAGE_SIZE)
 
         page_data = response.get("data") or {}
         listings = page_data.get("items") or []
@@ -88,8 +110,11 @@ def show_listing_list() -> None:
         total_count = page_data.get("total_count", 0)
 
         # 공고를 지워서 페이지가 줄어든 경우처럼, 백엔드가 맞춰 준 페이지를 따라갑니다.
-        if page != st.session_state.listing_page:
-            st.session_state.listing_page = page
+        # 주소창도 함께 정리해 두면 다시 새로고침해도 같은 화면이 나옵니다.
+        # 값이 같아지면 더 이상 고치지 않으므로 화면이 반복해서 다시 실행되지 않습니다.
+        if page != current_page:
+            st.query_params.from_dict(build_params(page))
+            st.rerun()
 
         if not listings:
             st.info("조회된 청약정보가 없습니다.")
@@ -126,8 +151,7 @@ def show_listing_list() -> None:
 
             # 수정 버튼을 누르면 이 공고 하나만 수정 화면으로 보여줍니다.
             if st.button("수정", key=f"edit-listing-{listing['id']}"):
-                st.session_state.edit_listing_id = listing["id"]
-                st.rerun()
+                open_edit(listing["id"])
 
             delete_confirmed = st.checkbox(
                 "삭제한 청약정보는 복구할 수 없습니다. 삭제에 동의합니다.",
@@ -188,10 +212,29 @@ def show_listing_list() -> None:
 
 
 def show_listing_edit(listing_id: int) -> None:
-    """선택한 공고 하나만 수정 화면으로 보여줍니다."""
+    """선택한 공고 하나만 수정 화면으로 보여줍니다.
 
-    response = get_listing(listing_id)
+    새로고침으로 들어온 경우에도 공고를 다시 조회해서 채웁니다.
+    """
+
+    # 주소창에 남은 ID가 이미 지워진 공고를 가리킬 수 있습니다.
+    # 이때는 오류 화면 대신 안내를 띄우고 목록으로 되돌립니다.
+    try:
+        response = get_listing(listing_id)
+    except BackendAPIError as error:
+        st.warning(f"수정할 청약정보를 불러오지 못했습니다. 목록으로 돌아갑니다. ({error})")
+        st.query_params.from_dict(build_params(current_page))
+        if st.button("목록으로 돌아가기", key="edit-back-after-error"):
+            st.rerun()
+        return
+
     listing = response.get("data") or {}
+    if not listing:
+        st.warning("수정할 청약정보를 찾을 수 없습니다. 이미 삭제된 공고일 수 있습니다.")
+        st.query_params.from_dict(build_params(current_page))
+        if st.button("목록으로 돌아가기", key="edit-back-when-missing"):
+            st.rerun()
+        return
 
     st.subheader("청약정보 수정")
 
@@ -279,8 +322,7 @@ def show_listing_edit(listing_id: int) -> None:
         canceled = st.form_submit_button("취소")
 
     if canceled:
-        st.session_state.pop("edit_listing_id", None)
-        st.rerun()
+        close_edit()
 
     if not saved:
         return
@@ -328,14 +370,14 @@ def show_listing_edit(listing_id: int) -> None:
         st.session_state.listing_message = result.get(
             "message", "청약정보가 수정되었습니다."
         )
-        st.session_state.pop("edit_listing_id", None)
-        st.rerun()
+        close_edit()
     else:
+        # 실패했는데 목록으로 나가면 성공한 것처럼 보이므로 수정 화면에 머뭅니다.
         st.error(result.get("message", "청약정보 수정에 실패했습니다."))
 
 
 try:
-    edit_listing_id = st.session_state.get("edit_listing_id")
+    edit_listing_id = current_edit_id
     if edit_listing_id is None:
         show_listing_list()
     else:
