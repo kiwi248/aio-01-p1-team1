@@ -3,6 +3,7 @@
 from datetime import date
 
 import streamlit as st
+from streamlit.components.v1 import html as components_html
 
 from clients.listing_client import (
     delete_listing,
@@ -16,7 +17,13 @@ from core.api_client import BackendAPIError
 from core.auth import is_logged_in
 from core.constants import SEOUL_DISTRICTS
 from core.image_delete import should_show_delete_button, summarize_result
-from core.page_params import build_params, parse_edit_id, parse_page
+from core.page_params import (
+    SEARCH_KEYS,
+    build_params,
+    parse_edit_id,
+    parse_page,
+    parse_search,
+)
 
 
 # 이미지 크기 제한입니다. 백엔드에서도 같은 값으로 다시 검사합니다.
@@ -39,15 +46,42 @@ if message := st.session_state.pop("listing_message", None):
 # 로그인 정보는 여기 넣지 않습니다. 그건 Session Storage가 따로 맡습니다.
 current_page = parse_page(st.query_params.get_all("page"))
 current_edit_id = parse_edit_id(st.query_params.get_all("edit_id"))
+# 조건검색도 주소창에 둡니다. 수정 화면에 다녀와도 보던 검색 결과가 남습니다.
+current_search = parse_search(
+    {name: st.query_params.get_all(name) for name in SEARCH_KEYS}
+)
 
 # "page=abc"나 "edit_id=-1"처럼 이상한 값이 들어오면 위에서 안전한 값으로 바꿉니다.
 # 주소창도 그 값으로 정리해 두어야 다시 새로고침해도 같은 화면이 나옵니다.
 # 한 번 정리하면 값이 같아지므로 화면이 반복해서 다시 실행되지 않습니다.
-_canonical_params = build_params(current_page, current_edit_id)
-_needs_rerun = st.query_params.to_dict() != _canonical_params
-# 값이 같아도 한 번 써 주면 주소창이 현재 상태와 어긋나지 않습니다.
-st.query_params.from_dict(_canonical_params)
-if _needs_rerun:
+# 브라우저 뒤로가기는 주소만 바꿀 뿐, Streamlit이 스스로 화면을 다시 그리지 않습니다.
+# 그래서 주소는 목록인데 화면은 수정 화면에 그대로 남습니다.
+# 주소가 바뀌면(popstate) 화면을 다시 읽어 오도록 한 번만 알려 둡니다.
+# 다시 읽어 오므로 저장하지 않은 수정 입력값은 남지 않습니다.
+components_html(
+    """
+    <script>
+    (function () {
+      const page = window.parent;
+      if (page.__listingHistorySyncReady) return;
+      page.__listingHistorySyncReady = true;
+      page.addEventListener("popstate", function () {
+        page.location.reload();
+      });
+    })();
+    </script>
+    """,
+    height=0,
+)
+
+_canonical_params = build_params(current_page, current_edit_id, current_search)
+
+# 값이 이미 같으면 절대로 다시 쓰지 않습니다.
+# st.query_params.from_dict()는 같은 값을 써도 브라우저 방문 기록을 새로 쌓습니다.
+# 화면이 다시 그려질 때마다 쓰면 같은 주소가 기록에 여러 번 남아,
+# 뒤로가기를 눌러도 똑같은 수정 화면으로 되돌아와 제자리에 멈춘 것처럼 보입니다.
+if st.query_params.to_dict() != _canonical_params:
+    st.query_params.from_dict(_canonical_params)
     st.rerun()
 
 
@@ -59,20 +93,20 @@ def to_date(value: str | None) -> date:
 
 
 def go_to_page(page: int) -> None:
-    """페이지를 옮깁니다. 열려 있던 수정 폼은 닫습니다."""
-    st.query_params.from_dict(build_params(page))
+    """페이지를 옮깁니다. 열려 있던 수정 폼은 닫고, 검색 조건은 유지합니다."""
+    st.query_params.from_dict(build_params(page, None, current_search))
     st.rerun()
 
 
 def open_edit(listing_id: int) -> None:
-    """수정 화면을 엽니다. 보고 있던 페이지 번호는 그대로 둡니다."""
-    st.query_params.from_dict(build_params(current_page, listing_id))
+    """수정 화면을 엽니다. 보고 있던 페이지 번호와 검색 조건은 그대로 둡니다."""
+    st.query_params.from_dict(build_params(current_page, listing_id, current_search))
     st.rerun()
 
 
 def close_edit() -> None:
-    """수정 화면을 닫고 목록으로 돌아갑니다. 페이지 번호는 유지합니다."""
-    st.query_params.from_dict(build_params(current_page))
+    """수정 화면을 닫고 목록으로 돌아갑니다. 페이지 번호와 검색 조건은 유지합니다."""
+    st.query_params.from_dict(build_params(current_page, None, current_search))
     st.rerun()
 
 
@@ -119,21 +153,53 @@ def confirm_image_delete(listing_id: int) -> None:
 def show_listing_list() -> None:
     """공고 목록과 검색, 수정/삭제 버튼을 보여줍니다."""
 
-    with st.expander("조건검색"):
+    # 입력칸의 처음 값은 주소창에 담긴 검색 조건을 따릅니다.
+    # 그래야 수정 화면에 다녀오거나 새로고침해도 조건이 그대로 보입니다.
+    district_options = ("전체",) + SEOUL_DISTRICTS
+    saved_location = current_search.get("location", "전체")
+    location_index = (
+        district_options.index(saved_location) if saved_location in district_options else 0
+    )
+
+    with st.expander("조건검색", expanded=bool(current_search)):
         with st.form("listing_search_form"):
-            search_location = st.selectbox("자치구", ("전체",) + SEOUL_DISTRICTS)
-            search_max_deposit = st.number_input("최대 보증금", min_value=0, step=10000, value=0)
-            search_max_monthly_rent = st.number_input("최대 월세", min_value=0, step=10000, value=0)
+            search_location = st.selectbox("자치구", district_options, index=location_index)
+            search_max_deposit = st.number_input(
+                "최대 보증금",
+                min_value=0,
+                step=10000,
+                value=int(current_search.get("max_deposit", 0)),
+            )
+            search_max_monthly_rent = st.number_input(
+                "최대 월세",
+                min_value=0,
+                step=10000,
+                value=int(current_search.get("max_monthly_rent", 0)),
+            )
             search_submitted = st.form_submit_button("검색")
 
     if search_submitted:
-        params = {}
+        # 검색 조건을 주소창에 적어 두고 다시 그립니다.
+        # 조건을 화면 변수에만 두면 수정 화면에 다녀왔을 때 사라집니다.
+        new_search = {}
         if search_location != "전체":
-            params["location"] = search_location
+            new_search["location"] = search_location
         if int(search_max_deposit) > 0:
-            params["max_deposit"] = int(search_max_deposit)
+            new_search["max_deposit"] = str(int(search_max_deposit))
         if int(search_max_monthly_rent) > 0:
-            params["max_monthly_rent"] = int(search_max_monthly_rent)
+            new_search["max_monthly_rent"] = str(int(search_max_monthly_rent))
+        # 조건이 그대로면 주소를 다시 쓰지 않습니다.
+        # 같은 값을 써도 방문 기록이 쌓여 뒤로가기가 헛돌기 때문입니다.
+        target_params = build_params(1, None, new_search)
+        if st.query_params.to_dict() != target_params:
+            st.query_params.from_dict(target_params)
+            st.rerun()
+
+    if current_search:
+        params = {"location": current_search["location"]} if "location" in current_search else {}
+        for name in ("max_deposit", "max_monthly_rent"):
+            if name in current_search:
+                params[name] = int(current_search[name])
         with st.spinner("검색 중..."):
             response = search_listings(params)
 
