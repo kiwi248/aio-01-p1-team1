@@ -98,7 +98,27 @@ with st.sidebar:
 
     if is_logged_in():
         st.page_link(listing_create_page)
-        st.page_link(listing_manage_page)
+
+        # 청약정보 조회 화면은 보고 있던 페이지와 수정 중인 공고를 주소창에 담아 둡니다.
+        # 그런데 st.page_link는 내부 페이지 주소에 query string을 붙일 수 없어서,
+        # 이미 이 화면에 있을 때 메뉴를 다시 눌러도 주소가 그대로라 화면이 바뀌지 않습니다.
+        # 그래서 지울 상태가 남아 있을 때만 버튼으로 바꿔 목록 1페이지로 돌려보냅니다.
+        on_listing_manage = navigation.url_path == listing_manage_page.url_path
+        has_view_state = (
+            "edit_id" in st.query_params or st.query_params.get("page") not in (None, "1")
+        )
+
+        if on_listing_manage and has_view_state:
+            if st.button(
+                "📋 청약정보 조회/삭제",
+                use_container_width=True,
+                key="nav-listing-manage-reset",
+            ):
+                st.query_params.from_dict({"page": "1"})
+                st.rerun()
+        else:
+            st.page_link(listing_manage_page)
+
         st.page_link(favorite_ranking_page)
         st.page_link(favorite_detail_page)
         st.page_link(log_dashboard_page)
