@@ -41,6 +41,28 @@ def listing_update(listing_id: int, listing: ListingCreate) -> ListingPublic | N
     return ListingPublic.model_validate(result.data[0])
 
 
+def listing_clear_image(listing_id: int) -> ListingPublic | None:
+    """공고에서 이미지 참조만 지웁니다.
+
+    image_url 한 칸만 건드립니다. 제목이나 금액 같은 다른 값은 보내지 않으므로,
+    관리자가 화면에 입력만 해 두고 아직 저장하지 않은 값이 함께 저장될 일이 없습니다.
+
+    Storage 파일 삭제는 여기서 하지 않습니다. DB가 먼저 바뀐 것을 확인한 뒤에
+    호출한 쪽에서 image_service로 지웁니다.
+    """
+
+    supabase = get_supabase()
+    result = (
+        supabase.table("listings")
+        .update({"image_url": None})
+        .eq("id", listing_id)
+        .execute()
+    )
+    if not result.data:
+        return None
+    return ListingPublic.model_validate(result.data[0])
+
+
 def listing_get_all() -> list[ListingPublic]:
     supabase = get_supabase()
     result = (
