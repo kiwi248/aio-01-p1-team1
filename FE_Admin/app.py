@@ -24,20 +24,31 @@ log_dashboard_page = st.Page("app_pages/06_log_dashboard.py", title="로그 대�
 log_history_page = st.Page("app_pages/07_log_history.py", title="로그 이력 조회", icon="🗂️")
 
 
-if is_logged_in():
-    pages = [
-        home_page,
-        listing_create_page,
-        listing_manage_page,
-        favorite_ranking_page,
-        favorite_detail_page,
-        log_dashboard_page,
-        log_history_page,
-    ]
-else:
-    pages = [home_page, login_page]
+# 페이지는 로그인 여부와 상관없이 모두 등록합니다.
+# 로그인 상태에 따라 목록을 바꾸면, 브라우저를 새로고침했을 때
+# st.session_state가 비어 있어 지금 보고 있던 주소가 목록에서 사라지고
+# "Page not found"가 뜹니다.
+# 등록은 항상 하되, 아래에서 로그인 여부를 검사합니다.
+pages = [
+    home_page,
+    login_page,
+    listing_create_page,
+    listing_manage_page,
+    favorite_ranking_page,
+    favorite_detail_page,
+    log_dashboard_page,
+    log_history_page,
+]
 
 navigation = st.navigation(pages, position="hidden")
+
+# 로그인 없이 볼 수 있는 페이지입니다. 나머지는 모두 보호 페이지입니다.
+public_url_paths = {home_page.url_path, login_page.url_path}
+
+# 보호 페이지에 로그인 없이 들어오면 오류 화면 대신 로그인 화면으로 보냅니다.
+# 주소를 직접 입력해도 여기서 걸리므로 관리자 기능에 접근할 수 없습니다.
+if navigation.url_path not in public_url_paths and not is_logged_in():
+    st.switch_page("app_pages/00_login.py")
 
 with st.sidebar:
     st.title("관리자 메뉴")
