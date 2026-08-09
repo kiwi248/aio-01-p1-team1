@@ -1,6 +1,16 @@
-"""관리자용 Streamlit 멀티페이지 앱입니다."""
+"""관리자용 Streamlit 멀티페이지 앱입니다.
+
+브라우저를 새로고침하면 st.session_state가 비기 때문에, 로그인 상태를
+브라우저 Session Storage에 두었다가 다시 읽어 옵니다.
+
+주의: Session Storage 기반 로그인 복원은 화면 상태를 되살리는 편의 기능이며
+실제 관리자 인증 수단이 아닙니다. 저장된 값은 사용자가 브라우저 개발자
+도구에서 바꿀 수 있습니다. 외부 배포 환경에서는 백엔드 관리자 API에
+만료되는 서명 토큰 인증과 서버 검증을 적용해야 합니다.
+"""
 
 import streamlit as st
+from streamlit_session_browser_storage import SessionStorage
 
 from core.auth import init_state, is_logged_in, logout
 
@@ -10,9 +20,6 @@ st.set_page_config(
     page_icon="🛠️",
     layout="wide",
 )
-
-init_state()
-
 
 home_page = st.Page("app_pages/01_home.py", title="홈", icon="🏠", default=True)
 login_page = st.Page("app_pages/00_login.py", title="로그인", icon="🔐")
@@ -40,7 +47,42 @@ pages = [
     log_history_page,
 ]
 
+# 경로 등록을 먼저 합니다. 아래에서 잠시 멈추더라도 지금 보고 있는 주소가
+# 유지되어, 새로고침 후 원래 페이지로 돌아올 수 있습니다.
 navigation = st.navigation(pages, position="hidden")
+
+# 탭을 닫으면 사라지는 Session Storage를 씁니다. Local Storage는 쓰지 않습니다.
+storage = SessionStorage(key="admin_session_storage")
+stored_values = storage.getAll()
+
+# 첫 실행에서는 브라우저에서 값이 아직 오지 않아 None이 옵니다.
+# 이때 로그아웃으로 단정하면 보호 페이지에서 로그인 화면으로 튕겨
+# 보고 있던 페이지를 잃어버립니다. 값이 도착할 때까지 기다립니다.
+# 값이 도착하면 컴포넌트가 화면을 다시 실행시킵니다.
+if stored_values is None:
+    st.caption("로그인 상태를 확인하는 중입니다...")
+    st.stop()
+
+stored_loginout = stored_values.get("loginout") or "logout"
+stored_admin_username = stored_values.get("admin_username") or ""
+
+# 새로고침 직후에는 여기서 브라우저에 저장해 둔 값으로 상태를 되살립니다.
+init_state(stored_loginout, stored_admin_username)
+
+# 화면에서 로그인/로그아웃한 결과를 브라우저 쪽에도 반영합니다.
+# 값이 이미 같으면 쓰지 않으므로 저장이 되풀이되지 않습니다.
+if st.session_state.loginout == "login":
+    if stored_loginout != "login":
+        storage.setItem("loginout", "login", key="save_loginout")
+    if stored_admin_username != st.session_state.admin_username:
+        storage.setItem(
+            "admin_username",
+            st.session_state.admin_username,
+            key="save_admin_username",
+        )
+elif stored_loginout != "logout":
+    # 로그아웃했으면 브라우저에 남은 로그인 정보를 지웁니다.
+    storage.deleteAll(key="clear_admin_session")
 
 # 로그인 없이 볼 수 있는 페이지입니다. 나머지는 모두 보호 페이지입니다.
 public_url_paths = {home_page.url_path, login_page.url_path}
