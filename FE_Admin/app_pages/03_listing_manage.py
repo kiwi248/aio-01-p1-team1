@@ -223,7 +223,9 @@ def show_listing_list() -> None:
         # 주소창도 함께 정리해 두면 다시 새로고침해도 같은 화면이 나옵니다.
         # 값이 같아지면 더 이상 고치지 않으므로 화면이 반복해서 다시 실행되지 않습니다.
         if page != current_page:
-            st.query_params.from_dict(build_params(page))
+            # 검색 조건은 그대로 두고 페이지 번호만 맞춥니다.
+            # 조건을 빼먹으면 주소가 바뀌면서 검색이 풀립니다.
+            st.query_params.from_dict(build_params(page, None, current_search))
             st.rerun()
 
         if not listings:
@@ -375,65 +377,65 @@ def show_listing_edit(listing_id: int) -> None:
         st.caption("등록된 이미지가 없습니다.")
 
     with st.form("listing_edit_form"):
-        title = st.text_input("공고 제목", value=listing.get("title") or "", key="edit-title")
+        title = st.text_input("공고 제목", value=listing.get("title") or "", key=f"edit-title-{listing_id}")
         housing_name = st.text_input(
-            "주택명", value=listing.get("housing_name") or "", key="edit-housing-name"
+            "주택명", value=listing.get("housing_name") or "", key=f"edit-housing-name-{listing_id}"
         )
         area_sqm = st.number_input(
             "면적(㎡)",
             min_value=0.01,
             value=float(listing.get("area_sqm") or 0.01),
-            key="edit-area-sqm",
+            key=f"edit-area-sqm-{listing_id}",
         )
         recruitment_count = st.number_input(
             "모집 인원",
             min_value=1,
             step=1,
             value=int(listing.get("recruitment_count") or 1),
-            key="edit-recruitment-count",
+            key=f"edit-recruitment-count-{listing_id}",
         )
         location = st.selectbox(
             "지역(서울 자치구)",
             SEOUL_DISTRICTS,
             index=location_index,
             placeholder="자치구를 선택해 주세요",
-            key="edit-location",
+            key=f"edit-location-{listing_id}",
         )
         deposit = st.number_input(
             "보증금",
             min_value=0,
             step=10000,
             value=int(listing.get("deposit") or 0),
-            key="edit-deposit",
+            key=f"edit-deposit-{listing_id}",
         )
         monthly_rent = st.number_input(
             "월세",
             min_value=0,
             step=10000,
             value=int(listing.get("monthly_rent") or 0),
-            key="edit-monthly-rent",
+            key=f"edit-monthly-rent-{listing_id}",
         )
         application_start_date = st.date_input(
             "신청 시작일",
             value=to_date(listing.get("application_start_date")),
-            key="edit-start-date",
+            key=f"edit-start-date-{listing_id}",
         )
         application_end_date = st.date_input(
             "신청 종료일",
             value=to_date(listing.get("application_end_date")),
-            key="edit-end-date",
+            key=f"edit-end-date-{listing_id}",
         )
         description = st.text_area(
-            "상세 설명", value=listing.get("description") or "", key="edit-description"
+            "상세 설명", value=listing.get("description") or "", key=f"edit-description-{listing_id}"
         )
         image_file = st.file_uploader(
             "새 이미지 (선택, 최대 5MB) - 고르지 않으면 기존 이미지를 그대로 둡니다",
             type=["jpg", "jpeg", "png", "webp"],
-            key="edit-image",
+            key=f"edit-image-{listing_id}",
         )
 
         source_url = st.text_input(
-            "원문 URL", value=listing.get("source_url") or "", key="edit-source-url"
+            "원문 URL", value=listing.get("source_url") or "", key=f"edit-source-url-{listing_id}"
         )
 
         # 두 버튼을 그냥 두면 세로로 쌓이므로, 목록 화면의 페이지 이동 버튼처럼
