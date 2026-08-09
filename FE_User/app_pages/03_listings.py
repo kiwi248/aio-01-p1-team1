@@ -7,6 +7,7 @@ from clients.listing_client import get_listings, search_listings
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
 from core.constants import SEOUL_DISTRICTS
+from core.listing_sort import DEFAULT_SORT, SORT_OPTIONS, sort_listings
 
 
 st.title("청약정보 조회")
@@ -41,7 +42,16 @@ try:
     if not listings:
         st.info("조회된 청약정보가 없습니다.")
     else:
-        st.caption(f"총 {len(listings)}건 (최신순)")
+        # 정렬은 화면에서 다시 늘어놓습니다. 서버에 다시 묻지 않습니다.
+        sort_option = st.selectbox(
+            "정렬 기준",
+            SORT_OPTIONS,
+            index=SORT_OPTIONS.index(DEFAULT_SORT),
+            key="listing-sort",
+        )
+        listings = sort_listings(listings, sort_option)
+
+        st.caption(f"총 {len(listings)}건 ({sort_option})")
 
         for listing in listings:
             with st.container(border=True):
