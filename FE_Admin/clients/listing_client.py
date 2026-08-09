@@ -56,3 +56,8 @@ def update_listing(listing_id: int, listing: dict[str, Any], image: Any = None):
 
 def delete_listing(listing_id: int):
     return request("DELETE", f"/admin/listings/delete/{listing_id}")
+
+
+def delete_listing_image(listing_id: int):
+    # 공고 id만 보냅니다. 수정 폼에 입력해 둔 값은 함께 보내지 않습니다.
+    return request("DELETE", f"/admin/listings/{listing_id}/image")

@@ -6,6 +6,7 @@ import streamlit as st
 
 from clients.listing_client import (
     delete_listing,
+    delete_listing_image,
     get_listing,
     get_listings_page,
     search_listings,
@@ -14,7 +15,7 @@ from clients.listing_client import (
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
 from core.constants import SEOUL_DISTRICTS
-from core.image_action import CONFLICT, build_image_fields, decide_image_action
+from core.image_delete import should_show_delete_button, summarize_result
 from core.page_params import build_params, parse_edit_id, parse_page
 
 
@@ -73,6 +74,46 @@ def close_edit() -> None:
     """수정 화면을 닫고 목록으로 돌아갑니다. 페이지 번호는 유지합니다."""
     st.query_params.from_dict(build_params(current_page))
     st.rerun()
+
+
+@st.dialog("이미지 삭제 확인")
+def confirm_image_delete(listing_id: int) -> None:
+    """이미지를 지우기 전에 한 번 더 묻는 경고창입니다.
+
+    여기서 삭제를 고르기 전까지는 서버에 아무것도 보내지 않습니다.
+    """
+
+    st.write("현재 등록된 이미지를 삭제하시겠습니까?")
+    st.warning("삭제된 이미지는 복구할 수 없습니다.")
+    st.caption("공고의 다른 수정 내용은 저장되지 않으며 현재 이미지만 삭제됩니다.")
+
+    cancel_column, delete_column = st.columns(2)
+
+    with cancel_column:
+        if st.button("취소", use_container_width=True, key="image-delete-cancel"):
+            # 아무것도 보내지 않고 경고창만 닫습니다.
+            st.rerun()
+
+    with delete_column:
+        if st.button(
+            "삭제", type="primary", use_container_width=True, key="image-delete-confirm"
+        ):
+            # 공고 id만 보냅니다. 수정 폼에 입력해 둔 값은 함께 가지 않습니다.
+            try:
+                response = delete_listing_image(listing_id)
+            except BackendAPIError as error:
+                st.error(str(error))
+                return
+
+            succeeded, message = summarize_result(response)
+            if not succeeded:
+                # 경고창을 닫지 않고 원인을 보여 줍니다.
+                st.error(message)
+                return
+
+            # 다시 그리면 공고를 새로 읽어 와 이미지 없음 상태가 됩니다.
+            st.session_state.image_delete_message = message
+            st.rerun()
 
 
 def show_listing_list() -> None:
@@ -254,26 +295,16 @@ def show_listing_edit(listing_id: int) -> None:
             "저장하려면 자치구를 다시 골라 주세요."
         )
 
-    has_image = bool(listing.get("image_url"))
+    if message := st.session_state.pop("image_delete_message", None):
+        st.success(message)
 
-    # 지금 이미지가 있을 때만 지우기를 고를 수 있습니다.
-    # 폼 밖에 두어야 고르는 즉시 화면이 다시 그려져 안내를 보여 줄 수 있습니다.
-    # 고르기만 해서는 아무것도 지워지지 않고, 아래 저장을 눌러야 실행됩니다.
-    remove_image = False
-    if has_image:
-        remove_image = st.checkbox(
-            "기존 이미지 삭제 (새 이미지를 올리지 않고 이미지 없는 상태로 저장)",
-            key="edit-remove-image",
-        )
-
-    if has_image:
-        st.caption("삭제 예정 이미지" if remove_image else "현재 이미지")
+    if should_show_delete_button(listing.get("image_url")):
+        st.caption("현재 이미지")
         st.image(listing["image_url"], width=300)
-        if remove_image:
-            st.warning(
-                "저장하면 위 이미지가 지워지고 이미지 없는 공고가 됩니다. "
-                "체크를 풀면 기존 이미지를 그대로 둡니다. 취소하면 아무것도 바뀌지 않습니다."
-            )
+
+        # 누르면 경고창만 뜹니다. 이 버튼만으로는 아무것도 지워지지 않습니다.
+        if st.button("현재 이미지 삭제", key=f"image-delete-open-{listing_id}"):
+            confirm_image_delete(listing_id)
     else:
         st.caption("등록된 이미지가 없습니다.")
 
@@ -369,17 +400,6 @@ def show_listing_edit(listing_id: int) -> None:
         st.error("신청 종료일은 신청 시작일보다 빠를 수 없습니다.")
         return
 
-    image_action = decide_image_action(
-        has_new_image=image_file is not None,
-        remove_selected=remove_image,
-    )
-    if image_action == CONFLICT:
-        st.error(
-            "새 이미지 업로드와 기존 이미지 삭제는 함께 고를 수 없습니다. "
-            "이미지를 바꾸려면 삭제 체크를 풀고, 없애려면 고른 파일을 지워 주세요."
-        )
-        return
-
     if image_file is not None and image_file.size > MAX_IMAGE_SIZE:
         st.error(
             f"이미지 크기는 5MB를 넘을 수 없습니다. "
@@ -400,7 +420,6 @@ def show_listing_edit(listing_id: int) -> None:
         "application_end_date": application_end_date.isoformat(),
         "description": description.strip(),
         "source_url": source_url.strip(),
-        **build_image_fields(image_action),
     }
 
     with st.spinner("수정하는 중..."):

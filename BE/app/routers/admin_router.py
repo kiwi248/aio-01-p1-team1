@@ -12,6 +12,7 @@ from app.services.admin_service import admin_login_process
 from app.services.favorite_service import favorite_detail, favorite_ranking
 from app.services.image_service import delete_listing_image, upload_listing_image
 from app.services.listing_service import (
+    listing_clear_image,
     listing_create,
     listing_delete,
     listing_get,
@@ -133,6 +134,44 @@ async def update_listing(
     return ApiResponse(
         success=True,
         message="청약정보가 수정되었습니다.",
+        data=updated_listing,
+    )
+
+
+# 4-1. 청약정보 이미지만 삭제
+@admin_router.delete("/listings/{listing_id}/image")
+def remove_listing_image(listing_id: int) -> ApiResponse:
+    """공고는 그대로 두고 이미지만 지웁니다.
+
+    수정 API와 따로 둔 이유는, 관리자가 화면에 입력만 해 두고 아직 저장하지 않은
+    제목·금액 같은 값이 이미지를 지울 때 함께 저장되지 않도록 하기 위해서입니다.
+    이 API는 공고 id만 받고 다른 값은 받지 않습니다.
+    """
+
+    current_listing = listing_get(listing_id)
+    if current_listing is None:
+        raise HTTPException(status_code=404, detail="청약정보를 찾을 수 없습니다.")
+
+    # 이미 이미지가 없으면 지울 것이 없습니다. 여러 번 눌러도 여기서 끝납니다.
+    if not current_listing.image_url:
+        return ApiResponse(
+            success=True,
+            message="이미 이미지가 없는 청약정보입니다.",
+            data=current_listing,
+        )
+
+    updated_listing = listing_clear_image(listing_id)
+    if updated_listing is None:
+        # DB가 아직 기존 이미지를 가리키고 있으므로 파일을 지우면 공고가 깨집니다.
+        raise HTTPException(status_code=500, detail="이미지 삭제에 실패했습니다.")
+
+    # DB에서 참조를 지운 뒤에만 파일을 지웁니다.
+    # 외부 URL·공유 이미지 제외와 실패 기록은 image_service가 맡습니다.
+    delete_listing_image(current_listing.image_url)
+
+    return ApiResponse(
+        success=True,
+        message="이미지를 삭제했습니다.",
         data=updated_listing,
     )
 
