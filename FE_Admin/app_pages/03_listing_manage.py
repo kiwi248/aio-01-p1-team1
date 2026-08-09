@@ -14,6 +14,7 @@ from clients.listing_client import (
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
 from core.constants import SEOUL_DISTRICTS
+from core.image_action import CONFLICT, build_image_fields, decide_image_action
 from core.page_params import build_params, parse_edit_id, parse_page
 
 
@@ -253,9 +254,26 @@ def show_listing_edit(listing_id: int) -> None:
             "저장하려면 자치구를 다시 골라 주세요."
         )
 
-    if listing.get("image_url"):
-        st.caption("현재 이미지")
+    has_image = bool(listing.get("image_url"))
+
+    # 지금 이미지가 있을 때만 지우기를 고를 수 있습니다.
+    # 폼 밖에 두어야 고르는 즉시 화면이 다시 그려져 안내를 보여 줄 수 있습니다.
+    # 고르기만 해서는 아무것도 지워지지 않고, 아래 저장을 눌러야 실행됩니다.
+    remove_image = False
+    if has_image:
+        remove_image = st.checkbox(
+            "기존 이미지 삭제 (새 이미지를 올리지 않고 이미지 없는 상태로 저장)",
+            key="edit-remove-image",
+        )
+
+    if has_image:
+        st.caption("삭제 예정 이미지" if remove_image else "현재 이미지")
         st.image(listing["image_url"], width=300)
+        if remove_image:
+            st.warning(
+                "저장하면 위 이미지가 지워지고 이미지 없는 공고가 됩니다. "
+                "체크를 풀면 기존 이미지를 그대로 둡니다. 취소하면 아무것도 바뀌지 않습니다."
+            )
     else:
         st.caption("등록된 이미지가 없습니다.")
 
@@ -316,6 +334,7 @@ def show_listing_edit(listing_id: int) -> None:
             type=["jpg", "jpeg", "png", "webp"],
             key="edit-image",
         )
+
         source_url = st.text_input(
             "원문 URL", value=listing.get("source_url") or "", key="edit-source-url"
         )
@@ -350,6 +369,17 @@ def show_listing_edit(listing_id: int) -> None:
         st.error("신청 종료일은 신청 시작일보다 빠를 수 없습니다.")
         return
 
+    image_action = decide_image_action(
+        has_new_image=image_file is not None,
+        remove_selected=remove_image,
+    )
+    if image_action == CONFLICT:
+        st.error(
+            "새 이미지 업로드와 기존 이미지 삭제는 함께 고를 수 없습니다. "
+            "이미지를 바꾸려면 삭제 체크를 풀고, 없애려면 고른 파일을 지워 주세요."
+        )
+        return
+
     if image_file is not None and image_file.size > MAX_IMAGE_SIZE:
         st.error(
             f"이미지 크기는 5MB를 넘을 수 없습니다. "
@@ -370,6 +400,7 @@ def show_listing_edit(listing_id: int) -> None:
         "application_end_date": application_end_date.isoformat(),
         "description": description.strip(),
         "source_url": source_url.strip(),
+        **build_image_fields(image_action),
     }
 
     with st.spinner("수정하는 중..."):
