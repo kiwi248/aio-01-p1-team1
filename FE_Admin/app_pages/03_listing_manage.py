@@ -320,8 +320,15 @@ def show_listing_edit(listing_id: int) -> None:
             "원문 URL", value=listing.get("source_url") or "", key="edit-source-url"
         )
 
-        saved = st.form_submit_button("저장", type="primary")
-        canceled = st.form_submit_button("취소")
+        # 두 버튼을 그냥 두면 세로로 쌓이므로, 목록 화면의 페이지 이동 버튼처럼
+        # 컬럼으로 나누어 같은 줄에 놓습니다.
+        save_column, cancel_column = st.columns(2)
+
+        with save_column:
+            saved = st.form_submit_button("저장", type="primary", use_container_width=True)
+
+        with cancel_column:
+            canceled = st.form_submit_button("취소", use_container_width=True)
 
     if canceled:
         close_edit()
