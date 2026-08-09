@@ -5,6 +5,7 @@ import streamlit as st
 from clients.listing_client import create_listing, upload_listing_image
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
+from core.amount_format import describe_amount
 from core.constants import SEOUL_DISTRICTS
 
 
@@ -17,6 +18,23 @@ if not is_logged_in():
     st.warning("로그인이 필요합니다.")
     st.stop()
 
+# 금액은 폼 밖에 둡니다.
+# 폼 안에서는 등록을 누르기 전까지 화면이 다시 그려지지 않아,
+# 입력하는 동안 얼마인지 확인할 수 없기 때문입니다.
+st.subheader("금액")
+
+deposit_column, monthly_rent_column = st.columns(2)
+
+with deposit_column:
+    deposit = st.number_input("보증금", min_value=0, step=10000, key="create-deposit")
+    st.caption(describe_amount(deposit))
+
+with monthly_rent_column:
+    monthly_rent = st.number_input("월세", min_value=0, step=10000, key="create-monthly-rent")
+    st.caption(describe_amount(monthly_rent))
+
+st.divider()
+
 with st.form("listing_create_form", clear_on_submit=True):
     title = st.text_input("공고 제목")
     housing_name = st.text_input("주택명")
@@ -28,8 +46,6 @@ with st.form("listing_create_form", clear_on_submit=True):
         index=None,
         placeholder="자치구를 선택해 주세요",
     )
-    deposit = st.number_input("보증금", min_value=0, step=10000)
-    monthly_rent = st.number_input("월세", min_value=0, step=10000)
     application_start_date = st.date_input("신청 시작일")
     application_end_date = st.date_input("신청 종료일")
     description = st.text_area("상세 설명")
