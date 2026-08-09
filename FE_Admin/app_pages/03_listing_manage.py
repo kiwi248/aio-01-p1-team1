@@ -150,21 +150,41 @@ def show_listing_list() -> None:
         return
 
     st.divider()
-    previous_column, info_column, next_column = st.columns([1, 2, 1])
+    previous_column, input_column, go_column, next_column, info_column = st.columns(
+        [1, 1.2, 1, 1, 2]
+    )
 
     with previous_column:
         if st.button("이전", disabled=page <= 1, use_container_width=True, key="listing-page-prev"):
             go_to_page(page - 1)
 
-    with info_column:
-        st.markdown(
-            f"<div style='text-align:center'>{page} / {total_pages} 페이지</div>",
-            unsafe_allow_html=True,
+    with input_column:
+        # key에 현재 페이지를 넣어 두면 페이지가 바뀔 때마다 입력창이 새로 만들어집니다.
+        # 그래서 이미 만들어진 위젯의 session_state를 건드리지 않아도
+        # 입력창 번호가 항상 현재 페이지와 같아집니다.
+        target_page = st.number_input(
+            "페이지 번호",
+            min_value=1,
+            max_value=total_pages,
+            value=page,
+            step=1,
+            label_visibility="collapsed",
+            key=f"listing-page-input-{page}-{total_pages}",
         )
+
+    with go_column:
+        if st.button("이동", use_container_width=True, key="listing-page-go"):
+            go_to_page(int(target_page))
 
     with next_column:
         if st.button("다음", disabled=page >= total_pages, use_container_width=True, key="listing-page-next"):
             go_to_page(page + 1)
+
+    with info_column:
+        st.markdown(
+            f"<div style='padding-top:0.4rem'>현재 {page} / {total_pages} 페이지</div>",
+            unsafe_allow_html=True,
+        )
 
 
 def show_listing_edit(listing_id: int) -> None:
