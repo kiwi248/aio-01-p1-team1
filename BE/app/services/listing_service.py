@@ -64,11 +64,17 @@ def listing_clear_image(listing_id: int) -> ListingPublic | None:
 
 
 def listing_get_all() -> list[ListingPublic]:
+    """마감이 가까운 순으로 돌려줍니다.
+
+    같은 날 마감이면 나중에 등록한 공고를 앞에 둡니다.
+    """
     supabase = get_supabase()
     result = (
         supabase.table("listings")
         .select("*")
-        .order("application_start_date", desc=True)
+        .order("application_end_date")
+        .order("created_at", desc=True)
+        .order("id", desc=True)
         .execute()
     )
     return [ListingPublic.model_validate(item) for item in result.data]
@@ -158,7 +164,13 @@ def listing_search(
     if max_monthly_rent is not None:
         query = query.lte("monthly_rent", max_monthly_rent)
 
-    result = query.order("application_start_date", desc=True).execute()
+    # 목록과 같은 기준입니다. 마감이 가까운 순, 같으면 등록이 최신인 순입니다.
+    result = (
+        query.order("application_end_date")
+        .order("created_at", desc=True)
+        .order("id", desc=True)
+        .execute()
+    )
     return [ListingPublic.model_validate(item) for item in result.data]
 
 

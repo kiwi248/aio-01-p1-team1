@@ -7,6 +7,7 @@ from clients.listing_client import get_listings, search_listings
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
 from core.constants import SEOUL_DISTRICTS
+from core.dday import dday_label, is_closed
 
 
 st.title("청약정보 조회")
@@ -41,7 +42,7 @@ try:
     if not listings:
         st.info("조회된 청약정보가 없습니다.")
     else:
-        st.caption(f"총 {len(listings)}건 (최신순)")
+        st.caption(f"총 {len(listings)}건 (마감이 가까운 순)")
 
         for listing in listings:
             with st.container(border=True):
@@ -60,10 +61,17 @@ try:
                     f"보증금: {int(listing.get('deposit') or 0):,}원  |  "
                     f"월세: {int(listing.get('monthly_rent') or 0):,}원"
                 )
+                end_date = listing.get("application_end_date")
+                remaining = dday_label(end_date)
                 st.caption(
                     f"신청 기간: {listing.get('application_start_date') or '-'} ~ "
-                    f"{listing.get('application_end_date') or '-'}"
+                    f"{end_date or '-'}"
                 )
+                if remaining:
+                    if is_closed(end_date):
+                        st.caption(f"신청 마감 ({remaining})")
+                    else:
+                        st.warning(f"신청 마감까지 {remaining}")
                 if listing.get("description"):
                     st.write(listing["description"])
 
