@@ -54,9 +54,53 @@ def parse_edit_id(raw: object) -> int | None:
     return listing_id if listing_id >= 1 else None
 
 
-def build_params(page: int, edit_id: int | None = None) -> dict[str, str]:
-    """주소창에 넣을 값을 만듭니다. 수정 중이 아니면 edit_id를 빼서 주소를 깔끔하게 둡니다."""
+# 조건검색에서 쓰는 값입니다. 이 세 가지도 주소창에 담아 두면
+# 수정 화면에 다녀와도, 새로고침해도 보던 검색 결과가 그대로 남습니다.
+SEARCH_KEYS = ("location", "max_deposit", "max_monthly_rent")
+
+
+def parse_search(raw_params: dict) -> dict[str, str]:
+    """URL에서 검색 조건만 꺼냅니다.
+
+    비어 있거나 숫자가 아니거나 0 이하인 금액은 조건이 없는 것으로 봅니다.
+    조건이 하나도 없으면 빈 사전을 돌려주고, 그때는 검색이 아니라 전체 목록입니다.
+    """
+    search: dict[str, str] = {}
+
+    location = _first_value(raw_params.get("location"))
+    if location and location.strip():
+        search["location"] = location.strip()
+
+    for name in ("max_deposit", "max_monthly_rent"):
+        value = _first_value(raw_params.get(name))
+        if value is None:
+            continue
+        try:
+            amount = int(value.strip())
+        except ValueError:
+            continue
+        if amount > 0:
+            search[name] = str(amount)
+
+    return search
+
+
+def build_params(
+    page: int,
+    edit_id: int | None = None,
+    search: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """주소창에 넣을 값을 만듭니다. 수정 중이 아니면 edit_id를 빼서 주소를 깔끔하게 둡니다.
+
+    검색 조건을 함께 넘기면 그대로 담습니다. 수정 화면을 열고 닫을 때 이 값을 그대로
+    넘겨 주면 돌아왔을 때 검색 결과가 유지됩니다.
+    """
     params = {"page": str(max(1, page))}
     if edit_id is not None:
         params["edit_id"] = str(edit_id)
+    if search:
+        for name in SEARCH_KEYS:
+            value = search.get(name)
+            if value is not None and str(value).strip():
+                params[name] = str(value).strip()
     return params
