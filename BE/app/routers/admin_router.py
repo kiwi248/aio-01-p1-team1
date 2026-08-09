@@ -78,15 +78,30 @@ async def update_listing(
     description: Annotated[str, Form(min_length=1)],
     source_url: Annotated[str, Form(min_length=1)],
     image: Annotated[UploadFile | None, File()] = None,
+    remove_image: Annotated[bool, Form()] = False,
 ) -> ApiResponse:
     current_listing = listing_get(listing_id)
     if current_listing is None:
         raise HTTPException(status_code=404, detail="청약정보를 찾을 수 없습니다.")
 
-    # 새 이미지를 고르지 않으면 기존 이미지를 그대로 씁니다.
+    has_new_image = image is not None and bool(image.filename)
+
+    # 새로 올리면서 동시에 지우라는 요청은 뜻이 서로 어긋나므로 받지 않습니다.
+    if has_new_image and remove_image:
+        raise HTTPException(
+            status_code=400,
+            detail="새 이미지 업로드와 기존 이미지 삭제를 함께 선택할 수 없습니다.",
+        )
+
+    # 이미지는 세 가지 중 하나입니다.
+    #   새 파일이 오면        -> 교체
+    #   지우라고 하면         -> 이미지 없음(None)
+    #   둘 다 아니면          -> 기존 이미지 유지
     image_url = current_listing.image_url
-    if image is not None and image.filename:
+    if has_new_image:
         image_url = await upload_listing_image(image)
+    elif remove_image:
+        image_url = None
 
     listing = ListingCreate(
         title=title,
@@ -106,7 +121,8 @@ async def update_listing(
 
     if updated_listing is None:
         # DB 수정이 실패했는데 새 이미지를 이미 올렸다면, 쓰이지 않는 파일이 되므로 지웁니다.
-        if image_url != current_listing.image_url:
+        # 기존 이미지는 아직 공고가 쓰고 있으므로 건드리지 않습니다.
+        if has_new_image:
             delete_listing_image(image_url)
         raise HTTPException(status_code=500, detail="청약정보 수정에 실패했습니다.")
 

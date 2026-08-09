@@ -5,6 +5,7 @@ import uuid
 
 from fastapi import HTTPException, UploadFile
 
+from app.core.log_store import add_log
 from app.core.supabase_config import get_supabase
 from app.core.upload_config import (
     ALLOWED_IMAGE_TYPES,
@@ -93,10 +94,42 @@ async def upload_listing_image(image: UploadFile) -> str:
     return public_url.rstrip("?")
 
 
+def is_image_still_used(image_url: str) -> bool:
+    """다른 공고가 아직 이 이미지를 쓰고 있는지 확인합니다.
+
+    이 함수는 DB에서 참조를 지운 뒤에 호출됩니다. 그래도 행이 남아 있다면
+    다른 공고가 같은 파일을 함께 쓰고 있다는 뜻이므로 파일을 지우면 안 됩니다.
+
+    확인하다가 오류가 나면 "쓰이고 있다"로 봅니다. 잘못 지워 되돌릴 수 없는 것보다
+    쓰이지 않는 파일이 남는 편이 안전하기 때문입니다.
+    """
+
+    try:
+        result = (
+            get_supabase()
+            .table("listings")
+            .select("id")
+            .eq("image_url", image_url)
+            .limit(1)
+            .execute()
+        )
+    except Exception as error:
+        add_log(
+            "warning",
+            "image_service",
+            f"이미지 참조 확인에 실패해 삭제하지 않았습니다. ({type(error).__name__})",
+            0,
+        )
+        return True
+
+    return bool(result.data)
+
+
 def delete_listing_image(image_url: str | None) -> None:
     """Storage에 올린 이미지를 지웁니다.
 
     공고를 지우거나 이미지를 바꿀 때 예전 파일이 남지 않게 합니다.
+    반드시 DB에서 참조를 지운 뒤에 호출해야 합니다.
     """
 
     if not image_url:
@@ -114,9 +147,16 @@ def delete_listing_image(image_url: str | None) -> None:
     if not storage_path:
         return
 
+    # 같은 파일을 다른 공고도 쓰고 있으면 지우지 않습니다.
+    if is_image_still_used(image_url):
+        return
+
     # 이미 DB에서 지운 뒤에 호출되므로, 파일 삭제가 실패해도 요청은 실패시키지 않습니다.
-    # 다만 조용히 넘기면 문제를 발견할 수 없으므로 서버 로그에는 남깁니다.
+    # 다만 조용히 넘기면 DB와 Storage가 어긋난 것을 아무도 모르게 되므로,
+    # 서버 로그와 관리자 로그 화면에 모두 남깁니다.
     try:
         get_supabase().storage.from_(STORAGE_BUCKET).remove([storage_path])
     except Exception as error:
-        print(f"[image_service] 이미지 삭제 실패: {storage_path} ({type(error).__name__}: {error})")
+        message = f"이미지 삭제 실패: {storage_path} ({type(error).__name__}: {error})"
+        print(f"[image_service] {message}")
+        add_log("error", "image_service", message, 0)
