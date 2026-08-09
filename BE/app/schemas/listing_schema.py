@@ -35,3 +35,16 @@ class ListingPublic(BaseModel):
     image_url: str | None = None
     source_url: str
     created_at: datetime
+
+
+class ListingPage(BaseModel):
+    """목록을 페이지로 나눠 보낼 때 쓰는 응답입니다.
+
+    화면이 전체 페이지 수를 계산할 수 있도록 개수 정보를 함께 담습니다.
+    """
+
+    items: list[ListingPublic]
+    page: int
+    page_size: int
+    total_count: int
+    total_pages: int
