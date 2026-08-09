@@ -42,8 +42,10 @@ current_edit_id = parse_edit_id(st.query_params.get_all("edit_id"))
 # 주소창도 그 값으로 정리해 두어야 다시 새로고침해도 같은 화면이 나옵니다.
 # 한 번 정리하면 값이 같아지므로 화면이 반복해서 다시 실행되지 않습니다.
 _canonical_params = build_params(current_page, current_edit_id)
-if st.query_params.to_dict() != _canonical_params:
-    st.query_params.from_dict(_canonical_params)
+_needs_rerun = st.query_params.to_dict() != _canonical_params
+# 값이 같아도 한 번 써 주면 주소창이 현재 상태와 어긋나지 않습니다.
+st.query_params.from_dict(_canonical_params)
+if _needs_rerun:
     st.rerun()
 
 
