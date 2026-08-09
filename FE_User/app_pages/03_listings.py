@@ -7,6 +7,13 @@ from clients.listing_client import get_listings, search_listings
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
 from core.constants import SEOUL_DISTRICTS
+from core.listing_view import (
+    card_title,
+    description_preview,
+    format_won,
+    period_line,
+    summary_line,
+)
 
 
 st.title("청약정보 조회")
@@ -45,27 +52,33 @@ try:
 
         for listing in listings:
             with st.container(border=True):
-                st.subheader(listing.get("title") or "제목 없음")
-                if listing.get("image_url"):
-                    st.image(listing["image_url"], width=300)
-                st.write(
-                    f"주택명: {listing.get('housing_name') or '-'}  |  "
-                    f"자치구: {listing.get('location') or '-'}"
-                )
-                st.write(
-                    f"면적: {listing.get('area_sqm') or '-'}㎡  |  "
-                    f"모집 인원: {listing.get('recruitment_count') or '-'}명"
-                )
-                st.write(
-                    f"보증금: {int(listing.get('deposit') or 0):,}원  |  "
-                    f"월세: {int(listing.get('monthly_rent') or 0):,}원"
-                )
-                st.caption(
-                    f"신청 기간: {listing.get('application_start_date') or '-'} ~ "
-                    f"{listing.get('application_end_date') or '-'}"
-                )
-                if listing.get("description"):
-                    st.write(listing["description"])
+                # 같은 공고 안에 주택형이 여러 개라 공고명이 전부 같습니다.
+                # 그래서 주택명을 앞세우고 공고명은 작게 둡니다.
+                text_column, image_column = st.columns([3, 1], vertical_alignment="top")
+
+                with text_column:
+                    st.markdown(f"#### {card_title(listing)}")
+                    st.caption(listing.get("title") or "")
+                    summary = summary_line(listing)
+                    if summary:
+                        st.write(summary)
+
+                with image_column:
+                    if listing.get("image_url"):
+                        st.image(listing["image_url"], use_container_width=True)
+
+                # 금액은 가장 먼저 보게 되는 값이라 따로 크게 보여 줍니다.
+                deposit_column, rent_column = st.columns(2)
+                deposit_column.metric("보증금", format_won(listing.get("deposit")))
+                rent_column.metric("월세", format_won(listing.get("monthly_rent")))
+
+                st.caption(period_line(listing))
+
+                # 설명이 길어 목록이 늘어지므로 첫 줄만 보여 주고 접어 둡니다.
+                preview = description_preview(listing)
+                if preview:
+                    with st.expander(f"상세 정보  ·  {preview}"):
+                        st.write(listing["description"])
 
                 if listing.get("source_url"):
                     st.link_button("공고 원문 보기", listing["source_url"])

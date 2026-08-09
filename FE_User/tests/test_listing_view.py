@@ -1,0 +1,107 @@
+# test_listing_view.py
+"""청약정보 목록 표시 문구 테스트."""
+
+import unittest
+
+from core.listing_view import (
+    card_title,
+    description_preview,
+    format_won,
+    period_line,
+    summary_line,
+)
+
+
+def sample_listing(**overrides) -> dict:
+    listing = {
+        "title": "2026년 1~2인가구를 위한 도시형생활주택 잔여세대 입주자 모집공고",
+        "housing_name": "방화동원룸(유니트로) 13㎡형",
+        "location": "강서구",
+        "area_sqm": "13.98",
+        "recruitment_count": 14,
+        "deposit": 10260000,
+        "monthly_rent": 125500,
+        "application_start_date": "2026-08-18",
+        "application_end_date": "2026-08-20",
+        "description": "신청자격 : 서울 거주 1인 무주택세대구성원\n소득기준 : 70% 이하",
+    }
+    listing.update(overrides)
+    return listing
+
+
+class CardTitleTest(unittest.TestCase):
+    def test_주택명을_제목으로_쓴다(self):
+        """공고명은 주택형마다 같아서 구분이 안 됩니다."""
+        self.assertEqual(card_title(sample_listing()), "방화동원룸(유니트로) 13㎡형")
+
+    def test_주택명이_없으면_공고명을_쓴다(self):
+        listing = sample_listing(housing_name="")
+        self.assertTrue(card_title(listing).startswith("2026년"))
+
+    def test_둘_다_없으면_기본_문구를_쓴다(self):
+        self.assertEqual(card_title({}), "제목 없음")
+
+    def test_공백만_있으면_비어_있는_것으로_본다(self):
+        listing = sample_listing(housing_name="   ")
+        self.assertNotEqual(card_title(listing), "   ")
+
+
+class SummaryLineTest(unittest.TestCase):
+    def test_자치구_면적_모집_인원을_한_줄로_묶는다(self):
+        self.assertEqual(
+            summary_line(sample_listing()), "강서구  ·  전용 13.98㎡  ·  14호 모집"
+        )
+
+    def test_값이_없는_항목은_빼고_보여_준다(self):
+        listing = sample_listing(area_sqm=None, recruitment_count=None)
+        self.assertEqual(summary_line(listing), "강서구")
+
+    def test_아무_값도_없으면_빈_문구다(self):
+        self.assertEqual(summary_line({}), "")
+
+    def test_대시가_그대로_보이지_않는다(self):
+        self.assertNotIn("-  ·", summary_line(sample_listing(location="")))
+
+
+class FormatWonTest(unittest.TestCase):
+    def test_쉼표를_넣는다(self):
+        self.assertEqual(format_won(10260000), "10,260,000원")
+
+    def test_숫자가_아니면_대시다(self):
+        self.assertEqual(format_won(None), "-")
+        self.assertEqual(format_won("abc"), "-")
+
+
+class PeriodLineTest(unittest.TestCase):
+    def test_신청_기간을_한_줄로_만든다(self):
+        self.assertEqual(period_line(sample_listing()), "신청 2026-08-18 ~ 2026-08-20")
+
+    def test_값이_없으면_대시로_채운다(self):
+        self.assertEqual(period_line({}), "신청 - ~ -")
+
+
+class DescriptionPreviewTest(unittest.TestCase):
+    def test_첫_줄만_보여_준다(self):
+        preview = description_preview(sample_listing())
+        self.assertEqual(preview, "신청자격 : 서울 거주 1인 무주택세대구성원")
+        self.assertNotIn("소득기준", preview)
+
+    def test_너무_길면_줄임표를_붙인다(self):
+        listing = sample_listing(description="가" * 100)
+        preview = description_preview(listing, limit=10)
+        self.assertTrue(preview.endswith("…"))
+        self.assertLessEqual(len(preview), 11)
+
+    def test_설명이_없으면_빈_문구다(self):
+        self.assertEqual(description_preview(sample_listing(description="")), "")
+        self.assertEqual(description_preview({}), "")
+
+    def test_원래_설명을_바꾸지_않는다(self):
+        listing = sample_listing()
+        original = listing["description"]
+        description_preview(listing)
+        self.assertEqual(listing["description"], original)
+
+
+if __name__ == "__main__":
+    unittest.main()
