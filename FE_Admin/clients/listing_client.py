@@ -22,6 +22,11 @@ def get_listings():
     return request("GET", "/listings/getall")
 
 
+def get_listings_page(page: int, page_size: int = 10):
+    # 전체를 받아 오지 않고 필요한 페이지만 가져옵니다.
+    return request("GET", "/listings/page", params={"page": page, "page_size": page_size})
+
+
 def get_listing(listing_id: int):
     return request("GET", f"/listings/get/{listing_id}")
 

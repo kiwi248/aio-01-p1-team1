@@ -7,7 +7,7 @@ import streamlit as st
 from clients.listing_client import (
     delete_listing,
     get_listing,
-    get_listings,
+    get_listings_page,
     search_listings,
     update_listing,
 )
@@ -19,6 +19,9 @@ from core.constants import SEOUL_DISTRICTS
 # 이미지 크기 제한입니다. 백엔드에서도 같은 값으로 다시 검사합니다.
 MAX_IMAGE_SIZE = 5 * 1024 * 1024
 
+# 한 페이지에 보여줄 공고 수입니다.
+PAGE_SIZE = 10
+
 st.title("청약정보 조회 / 삭제")
 
 if not is_logged_in():
@@ -28,12 +31,23 @@ if not is_logged_in():
 if message := st.session_state.pop("listing_message", None):
     st.success(message)
 
+# 현재 보고 있는 페이지 번호를 기억합니다.
+if "listing_page" not in st.session_state:
+    st.session_state.listing_page = 1
+
 
 def to_date(value: str | None) -> date:
     """API가 돌려준 "2026-08-01" 문자열을 날짜로 바꿉니다."""
     if not value:
         return date.today()
     return date.fromisoformat(value)
+
+
+def go_to_page(page: int) -> None:
+    """페이지를 옮깁니다. 열려 있던 수정 폼은 닫습니다."""
+    st.session_state.listing_page = page
+    st.session_state.pop("edit_listing_id", None)
+    st.rerun()
 
 
 def show_listing_list() -> None:
@@ -56,17 +70,32 @@ def show_listing_list() -> None:
             params["max_monthly_rent"] = int(search_max_monthly_rent)
         with st.spinner("검색 중..."):
             response = search_listings(params)
+
+        listings = response.get("data") or []
+        if not listings:
+            st.info("조회된 청약정보가 없습니다.")
+            return
+        st.caption(f"검색 결과 {len(listings)}건")
+        page = total_pages = total_count = None
     else:
         with st.spinner("불러오는 중..."):
-            response = get_listings()
+            response = get_listings_page(st.session_state.listing_page, PAGE_SIZE)
 
-    listings = response.get("data") or []
+        page_data = response.get("data") or {}
+        listings = page_data.get("items") or []
+        page = page_data.get("page", 1)
+        total_pages = page_data.get("total_pages", 1)
+        total_count = page_data.get("total_count", 0)
 
-    if not listings:
-        st.info("조회된 청약정보가 없습니다.")
-        return
+        # 공고를 지워서 페이지가 줄어든 경우처럼, 백엔드가 맞춰 준 페이지를 따라갑니다.
+        if page != st.session_state.listing_page:
+            st.session_state.listing_page = page
 
-    st.caption(f"총 {len(listings)}건")
+        if not listings:
+            st.info("조회된 청약정보가 없습니다.")
+            return
+
+        st.caption(f"총 {total_count}건  |  {page} / {total_pages} 페이지")
 
     for listing in listings:
         with st.container(border=True):
@@ -115,6 +144,27 @@ def show_listing_list() -> None:
                     "message", "청약정보를 삭제했습니다."
                 )
                 st.rerun()
+
+    # 검색 결과일 때는 페이지 이동 버튼을 두지 않습니다.
+    if total_pages is None:
+        return
+
+    st.divider()
+    previous_column, info_column, next_column = st.columns([1, 2, 1])
+
+    with previous_column:
+        if st.button("이전", disabled=page <= 1, use_container_width=True, key="listing-page-prev"):
+            go_to_page(page - 1)
+
+    with info_column:
+        st.markdown(
+            f"<div style='text-align:center'>{page} / {total_pages} 페이지</div>",
+            unsafe_allow_html=True,
+        )
+
+    with next_column:
+        if st.button("다음", disabled=page >= total_pages, use_container_width=True, key="listing-page-next"):
+            go_to_page(page + 1)
 
 
 def show_listing_edit(listing_id: int) -> None:

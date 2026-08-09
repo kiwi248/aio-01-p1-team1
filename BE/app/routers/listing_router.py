@@ -2,7 +2,14 @@
 from fastapi import APIRouter, HTTPException, Query
 
 from app.core.api_response import ApiResponse
-from app.services.listing_service import listing_get, listing_get_all, listing_search
+from app.services.listing_service import (
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+    listing_get,
+    listing_get_all,
+    listing_get_page,
+    listing_search,
+)
 
 listing_router = APIRouter(prefix="/listings", tags=["Listing"])
 
@@ -20,7 +27,23 @@ def get_all() -> ApiResponse:
     )
 
 
-# 2. 조건검색 (최신순, 위치, 최대 보증금, 최대 월세)
+# 2. 페이지 조회 (등록이 최신인 순서)
+#    기존 /getall은 사용자 화면과 벤치마크 스크립트가 쓰고 있어 그대로 두고,
+#    페이지가 필요한 화면만 이 경로를 씁니다.
+@listing_router.get("/page")
+def get_page(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+) -> ApiResponse:
+    listing_page = listing_get_page(page=page, page_size=page_size)
+    return ApiResponse(
+        success=True,
+        message="청약정보 목록을 조회했습니다.",
+        data=listing_page,
+    )
+
+
+# 3. 조건검색 (최신순, 위치, 최대 보증금, 최대 월세)
 @listing_router.get("/search")
 def search(
     location: str | None = Query(default=None),
@@ -39,7 +62,7 @@ def search(
     )
 
 
-# 3. 한개 조회
+# 4. 한개 조회
 @listing_router.get("/get/{listing_id}")
 def get(listing_id: int) -> ApiResponse:
     listing = listing_get(listing_id)
