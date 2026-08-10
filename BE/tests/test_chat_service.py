@@ -71,7 +71,7 @@ class ChatServiceTest(unittest.TestCase):
         self.assertEqual(user_b_items, [])
         self.assertEqual(saved.message_count, 2)
 
-    def test_real_summary_ends_with_user_summary_request(self):
+    def test_real_summary_uses_all_messages_and_generated_title(self):
         messages = [
             ChatMessage(role="user", content="청약 조건을 알려주세요."),
             ChatMessage(role="assistant", content="조건을 안내해 드리겠습니다."),
@@ -83,26 +83,46 @@ class ChatServiceTest(unittest.TestCase):
                 {"CHAT_GEMINI_MODE": "gemini", "CHAT_SUMMARY_STORAGE": "preview"},
                 clear=False,
             ),
-            patch.object(chat_service, "_generate_text", return_value="상담 요약") as generate,
+            patch.object(
+                chat_service,
+                "_generate_summary",
+                return_value=("청약 조건 상담", "상담 요약"),
+            ) as generate,
         ):
-            chat_service.create_chat_summary("user-a", messages)
+            saved = chat_service.create_chat_summary("user-a", messages)
 
-        summary_contents = generate.call_args.args[0]
-        self.assertEqual(summary_contents[-1]["role"], "user")
-        self.assertEqual(
-            summary_contents[-1]["parts"][0]["text"],
-            chat_service.SUMMARY_REQUEST,
-        )
+        self.assertEqual(generate.call_args.args[0], messages)
+        self.assertEqual(saved.title, "청약 조건 상담")
 
-    def test_제목은_첫_사용자_질문으로_만든다(self):
+    def test_제목은_요약의_상담_주제로_만든다(self):
+        summary = "상담 주제:\n- 청약 신청 전 확인 사항\n\n주요 질문:\n- 질문"
+        title = chat_service.make_summary_title(summary)
+
+        self.assertEqual(title, "청약 신청 전 확인 사항")
+
+    def test_요약용_내용은_대화_전체를_사용한다(self):
+        messages = [ChatMessage(role="user", content=f"질문 {index}") for index in range(12)]
+        contents = chat_service.to_gemini_summary_contents(messages)
+        self.assertEqual(len(contents), 13)
+        self.assertEqual(contents[0]["parts"][0]["text"], "질문 0")
+        self.assertEqual(contents[-1]["parts"][0]["text"], chat_service.SUMMARY_REQUEST)
+
+    def test_preview_요약은_소유한_사용자만_삭제한다(self):
         messages = [
-            ChatMessage(role="assistant", content="환영합니다"),
-            ChatMessage(role="user", content="청약 신청 전에 무엇을 확인해야 하나요?"),
+            ChatMessage(role="user", content="질문"),
+            ChatMessage(role="assistant", content="답변"),
         ]
-
-        title = chat_service.make_summary_title(messages)
-
-        self.assertEqual(title, "청약 신청 전에 무엇을 확인해야 하나요?")
+        with patch.dict(
+            os.environ,
+            {"CHAT_GEMINI_MODE": "mock", "CHAT_SUMMARY_STORAGE": "preview"},
+            clear=False,
+        ):
+            saved = chat_service.create_chat_summary("user-a", messages)
+            with self.assertRaises(Exception):
+                chat_service.delete_chat_summary("user-b", str(saved.id))
+            self.assertEqual(len(chat_service.list_chat_summaries("user-a")), 1)
+            chat_service.delete_chat_summary("user-a", str(saved.id))
+            self.assertEqual(chat_service.list_chat_summaries("user-a"), [])
 
 
 if __name__ == "__main__":

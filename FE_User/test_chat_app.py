@@ -25,6 +25,7 @@ TEST_BACKEND_URL = "http://127.0.0.1:8010"
 # 기존 core/api_client.py 파일은 수정하지 않고 테스트 실행 중인 메모리 값만 바꿉니다.
 api_client.BACKEND_URL = TEST_BACKEND_URL
 os.environ["CHAT_BACKEND_URL"] = TEST_BACKEND_URL
+os.environ["GUIDE_BACKEND_URL"] = TEST_BACKEND_URL
 
 
 home_page = st.Page("app_pages/02_home.py", title="홈", icon="🏠", default=True)
@@ -36,6 +37,7 @@ favorite_page = st.Page("app_pages/05_favorite.py", title="즐겨찾기", icon="
 
 # 실제 app.py에는 아직 없는 AI 상담 페이지만 추가합니다.
 ai_chat_page = st.Page("app_pages/05_ai_chat.py", title="AI 채팅 상담", icon="🤖")
+ai_guide_page = st.Page("app_pages/06_ai_guide.py", title="AI 안내원", icon="🧭")
 
 
 # 실제 앱의 새로고침 복원 구조와 동일하게 모든 페이지를 항상 등록합니다.
@@ -47,6 +49,7 @@ pages = [
     mypage_page,
     favorite_page,
     ai_chat_page,
+    ai_guide_page,
 ]
 navigation = st.navigation(pages, position="hidden")
 
@@ -93,6 +96,7 @@ with st.sidebar:
         st.page_link(favorite_page)
         st.page_link(mypage_page)
         st.page_link(ai_chat_page)
+        st.page_link(ai_guide_page)
         st.divider()
         st.caption(f"{st.session_state.email} 님")
         st.button("LOGOUT", on_click=logout, use_container_width=True)

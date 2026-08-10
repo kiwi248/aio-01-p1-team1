@@ -40,7 +40,8 @@ class ChatAnswer(BaseModel):
 
 
 class ChatSaveRequest(BaseModel):
-    messages: list[ChatMessage] = Field(min_length=2, max_length=100)
+    # 이전 프런트엔드와의 호환을 위해 필드는 유지하지만 Redis 기록을 기준으로 저장합니다.
+    messages: list[ChatMessage] = Field(default_factory=list, max_length=100)
 
 
 class ChatSummaryItem(BaseModel):

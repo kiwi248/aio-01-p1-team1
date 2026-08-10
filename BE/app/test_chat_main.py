@@ -15,6 +15,7 @@ from app.exceptions.handlers import register_exception_handlers
 from app.routers.admin_router import admin_router
 from app.routers.chat_router import chat_router
 from app.routers.favorite_router import favorite_router
+from app.routers.guide_router import guide_router
 from app.routers.listing_router import listing_router
 from app.routers.log_router import log_router
 from app.routers.profile_router import profile_router
@@ -48,6 +49,10 @@ tags_metadata = [
     {
         "name": "Chat",
         "description": "로그인 사용자의 Gemini 상담, 요약 저장 및 조회",
+    },
+    {
+        "name": "AI Guide",
+        "description": "프로젝트 사용법과 간단한 청약 용어를 안내하는 독립 AI 안내원",
     },
 ]
 
@@ -115,3 +120,4 @@ app.include_router(listing_router)
 app.include_router(favorite_router)
 app.include_router(log_router)
 app.include_router(chat_router)
+app.include_router(guide_router)

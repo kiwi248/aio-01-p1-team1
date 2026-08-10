@@ -54,23 +54,35 @@ def get_chat_profile(access_token: str) -> dict:
     return _request("GET", "/chat/me", access_token)
 
 
-def send_chat_message(question: str, messages: list[dict], access_token: str) -> dict:
+def get_chat_history(access_token: str) -> dict:
+    return _request("GET", "/chat/history", access_token)
+
+
+def delete_chat_history(access_token: str) -> dict:
+    return _request("DELETE", "/chat/history", access_token)
+
+
+def send_chat_message(question: str, access_token: str) -> dict:
     return _request(
         "POST",
         "/chat/message",
         access_token,
-        json={"question": question, "messages": messages},
+        json={"question": question},
     )
 
 
-def save_chat_summary(messages: list[dict], access_token: str) -> dict:
+def save_chat_summary(access_token: str) -> dict:
     return _request(
         "POST",
         "/chat/save",
         access_token,
-        json={"messages": messages},
+        json={},
     )
 
 
 def get_chat_summaries(access_token: str) -> dict:
     return _request("GET", "/chat/summaries", access_token)
+
+
+def delete_chat_summary(summary_id: str, access_token: str) -> dict:
+    return _request("DELETE", f"/chat/summaries/{summary_id}", access_token)
