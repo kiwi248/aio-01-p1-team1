@@ -1,4 +1,7 @@
 # listing_service.py
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from app.core.supabase_config import get_supabase
 from app.schemas.listing_schema import ListingCreate, ListingPage, ListingPublic
 
@@ -64,6 +67,8 @@ def listing_clear_image(listing_id: int) -> ListingPublic | None:
 
 
 def listing_get_all() -> list[ListingPublic]:
+ 
+
     supabase = get_supabase()
     result = (
         supabase.table("listings")
@@ -131,6 +136,8 @@ def listing_get_page(page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> Listi
 
 
 def listing_get(listing_id: int) -> ListingPublic | None:
+  
+
     supabase = get_supabase()
     result = (
         supabase.table("listings")

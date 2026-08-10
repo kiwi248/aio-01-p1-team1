@@ -1,5 +1,8 @@
 # 04_mypage.py
 
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
 import streamlit as st
 
 from clients.profile_client import get_profile, update_profile
@@ -18,7 +21,19 @@ INTEREST_OPTIONS = [
     "주택관리",
 ]
 
+<<<<<<< HEAD
 st.title("회원정보수정")
+=======
+def is_expired_listing(deadline: str | None) -> bool:
+    if deadline is None:
+        return False
+
+    today = datetime.now(ZoneInfo("Asia/Seoul")).date()
+    return date.fromisoformat(deadline) < today
+
+
+st.title("My Page")
+>>>>>>> favorite
 
 if not is_logged_in():
     st.warning("로그인이 필요합니다.")
@@ -55,6 +70,7 @@ try:
         interests = []
         interest_columns = st.columns(3)
 
+<<<<<<< HEAD
         for index, option in enumerate(INTEREST_OPTIONS):
             with interest_columns[index % 3]:
                 checked = st.checkbox(
@@ -136,5 +152,34 @@ try:
             st.rerun()
     if message := st.session_state.pop("mypage_message", None):
         st.info(message)
+=======
+        for favorite in favorites:
+            listing = favorite.get("listing") or {}
+            title = listing.get("title") or "제목 없음"
+            listing_info = (
+                f"대상: {listing.get('type') or '-'}  |  "
+                f"위치: {listing.get('location') or '-'}  |  "
+                f"금액: {int(listing.get('price') or 0):,}원"
+            )
+            expired = is_expired_listing(listing.get("deadline"))
+
+            with st.container(border=True):
+                if expired:
+                    st.caption(f"마감 · {title}")
+                    st.caption(listing_info)
+                else:
+                    st.write(f"**{title}**")
+                    st.write(listing_info)
+
+                if st.button(
+                    "즐겨찾기 삭제",
+                    key=f"favorite-delete-{favorite['listing_id']}",
+                ):
+                    result = delete_favorite(st.session_state.user_id, favorite["listing_id"])
+                    st.session_state.mypage_message = result.get(
+                        "message", "즐겨찾기를 삭제했습니다."
+                    )
+                    st.rerun()
+>>>>>>> favorite
 except BackendAPIError as error:
     st.error(str(error))
