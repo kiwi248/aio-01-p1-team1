@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS listings (
     area_sqm               NUMERIC(10,2) NOT NULL,  -- 전용면적 (제곱미터)
     recruitment_count      INTEGER NOT NULL,        -- 모집 호수
     location               VARCHAR(50) NOT NULL,    -- 위치 (서울시 구 단위)
+    detail_address         VARCHAR(255),            -- 상세주소 (도로명 주소, 선택)
     deposit                BIGINT NOT NULL,         -- 임대보증금 (원 단위)
     monthly_rent           BIGINT NOT NULL,         -- 월 임대료 (원 단위)
     application_start_date DATE NOT NULL,           -- 신청 시작일 (최신순 정렬)

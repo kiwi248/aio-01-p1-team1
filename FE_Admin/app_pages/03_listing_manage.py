@@ -3,6 +3,7 @@
 from datetime import date
 
 import streamlit as st
+from streamlit.components.v1 import html as components_html
 
 from clients.listing_client import (
     delete_listing,
@@ -16,7 +17,23 @@ from core.api_client import BackendAPIError
 from core.auth import is_logged_in
 from core.constants import SEOUL_DISTRICTS
 from core.image_delete import should_show_delete_button, summarize_result
-from core.page_params import build_params, parse_edit_id, parse_page
+from core.listing_view import (
+    address_line,
+    card_title,
+    description_preview,
+    description_lines,
+    format_description_line,
+    format_won,
+    period_line,
+    summary_line,
+)
+from core.page_params import (
+    SEARCH_KEYS,
+    build_params,
+    parse_edit_id,
+    parse_page,
+    parse_search,
+)
 
 
 # 이미지 크기 제한입니다. 백엔드에서도 같은 값으로 다시 검사합니다.
@@ -39,15 +56,42 @@ if message := st.session_state.pop("listing_message", None):
 # 로그인 정보는 여기 넣지 않습니다. 그건 Session Storage가 따로 맡습니다.
 current_page = parse_page(st.query_params.get_all("page"))
 current_edit_id = parse_edit_id(st.query_params.get_all("edit_id"))
+# 조건검색도 주소창에 둡니다. 수정 화면에 다녀와도 보던 검색 결과가 남습니다.
+current_search = parse_search(
+    {name: st.query_params.get_all(name) for name in SEARCH_KEYS}
+)
 
 # "page=abc"나 "edit_id=-1"처럼 이상한 값이 들어오면 위에서 안전한 값으로 바꿉니다.
 # 주소창도 그 값으로 정리해 두어야 다시 새로고침해도 같은 화면이 나옵니다.
 # 한 번 정리하면 값이 같아지므로 화면이 반복해서 다시 실행되지 않습니다.
-_canonical_params = build_params(current_page, current_edit_id)
-_needs_rerun = st.query_params.to_dict() != _canonical_params
-# 값이 같아도 한 번 써 주면 주소창이 현재 상태와 어긋나지 않습니다.
-st.query_params.from_dict(_canonical_params)
-if _needs_rerun:
+# 브라우저 뒤로가기는 주소만 바꿀 뿐, Streamlit이 스스로 화면을 다시 그리지 않습니다.
+# 그래서 주소는 목록인데 화면은 수정 화면에 그대로 남습니다.
+# 주소가 바뀌면(popstate) 화면을 다시 읽어 오도록 한 번만 알려 둡니다.
+# 다시 읽어 오므로 저장하지 않은 수정 입력값은 남지 않습니다.
+components_html(
+    """
+    <script>
+    (function () {
+      const page = window.parent;
+      if (page.__listingHistorySyncReady) return;
+      page.__listingHistorySyncReady = true;
+      page.addEventListener("popstate", function () {
+        page.location.reload();
+      });
+    })();
+    </script>
+    """,
+    height=0,
+)
+
+_canonical_params = build_params(current_page, current_edit_id, current_search)
+
+# 값이 이미 같으면 절대로 다시 쓰지 않습니다.
+# st.query_params.from_dict()는 같은 값을 써도 브라우저 방문 기록을 새로 쌓습니다.
+# 화면이 다시 그려질 때마다 쓰면 같은 주소가 기록에 여러 번 남아,
+# 뒤로가기를 눌러도 똑같은 수정 화면으로 되돌아와 제자리에 멈춘 것처럼 보입니다.
+if st.query_params.to_dict() != _canonical_params:
+    st.query_params.from_dict(_canonical_params)
     st.rerun()
 
 
@@ -59,20 +103,20 @@ def to_date(value: str | None) -> date:
 
 
 def go_to_page(page: int) -> None:
-    """페이지를 옮깁니다. 열려 있던 수정 폼은 닫습니다."""
-    st.query_params.from_dict(build_params(page))
+    """페이지를 옮깁니다. 열려 있던 수정 폼은 닫고, 검색 조건은 유지합니다."""
+    st.query_params.from_dict(build_params(page, None, current_search))
     st.rerun()
 
 
 def open_edit(listing_id: int) -> None:
-    """수정 화면을 엽니다. 보고 있던 페이지 번호는 그대로 둡니다."""
-    st.query_params.from_dict(build_params(current_page, listing_id))
+    """수정 화면을 엽니다. 보고 있던 페이지 번호와 검색 조건은 그대로 둡니다."""
+    st.query_params.from_dict(build_params(current_page, listing_id, current_search))
     st.rerun()
 
 
 def close_edit() -> None:
-    """수정 화면을 닫고 목록으로 돌아갑니다. 페이지 번호는 유지합니다."""
-    st.query_params.from_dict(build_params(current_page))
+    """수정 화면을 닫고 목록으로 돌아갑니다. 페이지 번호와 검색 조건은 유지합니다."""
+    st.query_params.from_dict(build_params(current_page, None, current_search))
     st.rerun()
 
 
@@ -119,21 +163,53 @@ def confirm_image_delete(listing_id: int) -> None:
 def show_listing_list() -> None:
     """공고 목록과 검색, 수정/삭제 버튼을 보여줍니다."""
 
-    with st.expander("조건검색"):
+    # 입력칸의 처음 값은 주소창에 담긴 검색 조건을 따릅니다.
+    # 그래야 수정 화면에 다녀오거나 새로고침해도 조건이 그대로 보입니다.
+    district_options = ("전체",) + SEOUL_DISTRICTS
+    saved_location = current_search.get("location", "전체")
+    location_index = (
+        district_options.index(saved_location) if saved_location in district_options else 0
+    )
+
+    with st.expander("조건검색", expanded=bool(current_search)):
         with st.form("listing_search_form"):
-            search_location = st.selectbox("자치구", ("전체",) + SEOUL_DISTRICTS)
-            search_max_deposit = st.number_input("최대 보증금", min_value=0, step=10000, value=0)
-            search_max_monthly_rent = st.number_input("최대 월세", min_value=0, step=10000, value=0)
+            search_location = st.selectbox("자치구", district_options, index=location_index)
+            search_max_deposit = st.number_input(
+                "최대 보증금",
+                min_value=0,
+                step=10000,
+                value=int(current_search.get("max_deposit", 0)),
+            )
+            search_max_monthly_rent = st.number_input(
+                "최대 월세",
+                min_value=0,
+                step=10000,
+                value=int(current_search.get("max_monthly_rent", 0)),
+            )
             search_submitted = st.form_submit_button("검색")
 
     if search_submitted:
-        params = {}
+        # 검색 조건을 주소창에 적어 두고 다시 그립니다.
+        # 조건을 화면 변수에만 두면 수정 화면에 다녀왔을 때 사라집니다.
+        new_search = {}
         if search_location != "전체":
-            params["location"] = search_location
+            new_search["location"] = search_location
         if int(search_max_deposit) > 0:
-            params["max_deposit"] = int(search_max_deposit)
+            new_search["max_deposit"] = str(int(search_max_deposit))
         if int(search_max_monthly_rent) > 0:
-            params["max_monthly_rent"] = int(search_max_monthly_rent)
+            new_search["max_monthly_rent"] = str(int(search_max_monthly_rent))
+        # 조건이 그대로면 주소를 다시 쓰지 않습니다.
+        # 같은 값을 써도 방문 기록이 쌓여 뒤로가기가 헛돌기 때문입니다.
+        target_params = build_params(1, None, new_search)
+        if st.query_params.to_dict() != target_params:
+            st.query_params.from_dict(target_params)
+            st.rerun()
+
+    if current_search:
+        params = {"location": current_search["location"]} if "location" in current_search else {}
+        for name in ("max_deposit", "max_monthly_rent"):
+            if name in current_search:
+                params[name] = int(current_search[name])
         with st.spinner("검색 중..."):
             response = search_listings(params)
 
@@ -157,7 +233,9 @@ def show_listing_list() -> None:
         # 주소창도 함께 정리해 두면 다시 새로고침해도 같은 화면이 나옵니다.
         # 값이 같아지면 더 이상 고치지 않으므로 화면이 반복해서 다시 실행되지 않습니다.
         if page != current_page:
-            st.query_params.from_dict(build_params(page))
+            # 검색 조건은 그대로 두고 페이지 번호만 맞춥니다.
+            # 조건을 빼먹으면 주소가 바뀌면서 검색이 풀립니다.
+            st.query_params.from_dict(build_params(page, None, current_search))
             st.rerun()
 
         if not listings:
@@ -168,50 +246,81 @@ def show_listing_list() -> None:
 
     for listing in listings:
         with st.container(border=True):
-            st.subheader(listing.get("title") or "제목 없음")
-            if listing.get("image_url"):
-                st.image(listing["image_url"], width=300)
-            st.write(
-                f"주택명: {listing.get('housing_name') or '-'}  |  "
-                f"자치구: {listing.get('location') or '-'}"
-            )
-            st.write(
-                f"면적: {listing.get('area_sqm') or '-'}㎡  |  "
-                f"모집 인원: {listing.get('recruitment_count') or '-'}명"
-            )
-            st.write(
-                f"보증금: {int(listing.get('deposit') or 0):,}원  |  "
-                f"월세: {int(listing.get('monthly_rent') or 0):,}원"
-            )
-            st.caption(
-                f"신청 시작일: {listing.get('application_start_date') or '-'}  |  "
-                f"신청 종료일: {listing.get('application_end_date') or '-'}"
-            )
-            if listing.get("description"):
-                st.write(listing["description"])
+            # 같은 공고 안에 주택형이 여러 개라 공고명이 전부 같습니다.
+            # 주택명을 앞세우고 공고명은 작게 둡니다.
+            text_column, image_column = st.columns([3, 1], vertical_alignment="top")
 
-            if listing.get("source_url"):
-                st.link_button("공고 원문 보기", listing["source_url"])
+            with text_column:
+                st.markdown(f"#### {card_title(listing)}")
+                st.caption(f"#{listing['id']}  ·  {listing.get('title') or ''}")
 
-            # 수정 버튼을 누르면 이 공고 하나만 수정 화면으로 보여줍니다.
-            if st.button("수정", key=f"edit-listing-{listing['id']}"):
-                open_edit(listing["id"])
+                summary = summary_line(listing)
+                if summary:
+                    st.write(summary)
 
-            delete_confirmed = st.checkbox(
-                "삭제한 청약정보는 복구할 수 없습니다. 삭제에 동의합니다.",
-                key=f"delete-confirm-{listing['id']}",
-            )
-            if st.button(
-                "삭제",
-                type="primary",
-                disabled=not delete_confirmed,
-                key=f"delete-listing-{listing['id']}",
-            ):
-                result = delete_listing(listing["id"])
-                st.session_state.listing_message = result.get(
-                    "message", "청약정보를 삭제했습니다."
+                address = address_line(listing)
+                if address:
+                    st.write(address)
+
+            with image_column:
+                if listing.get("image_url"):
+                    st.image(listing["image_url"], use_container_width=True)
+
+            # 금액은 가장 먼저 확인하는 값이라 나란히 크게 둡니다.
+            deposit_column, rent_column = st.columns(2)
+            deposit_column.caption("보증금")
+            deposit_column.markdown(f"**{format_won(listing.get('deposit'))}**")
+            rent_column.caption("월세")
+            rent_column.markdown(f"**{format_won(listing.get('monthly_rent'))}**")
+
+            st.caption(period_line(listing))
+
+            # 설명이 길어 목록이 늘어지므로 첫 줄만 보여 주고 접어 둡니다.
+            preview = description_preview(listing)
+            if preview:
+                with st.expander(f"상세 정보  ·  {preview}"):
+                    # 줄바꿈 하나는 마크다운에서 공백이 되어 항목이 한 줄로 붙습니다.
+                    # 줄마다 따로 그려 항목이 구분되게 합니다.
+                    for line in description_lines(listing):
+                        st.markdown(format_description_line(line))
+
+            link_column, edit_column = st.columns(2)
+
+            with link_column:
+                if listing.get("source_url"):
+                    st.link_button(
+                        "공고 원문 보기",
+                        listing["source_url"],
+                        use_container_width=True,
+                    )
+
+            with edit_column:
+                # 수정 버튼을 누르면 이 공고 하나만 수정 화면으로 보여줍니다.
+                if st.button(
+                    "수정",
+                    use_container_width=True,
+                    key=f"edit-listing-{listing['id']}",
+                ):
+                    open_edit(listing["id"])
+
+            with st.expander("이 공고 삭제"):
+                st.warning("삭제한 청약정보는 복구할 수 없습니다.")
+                delete_confirmed = st.checkbox(
+                    "삭제에 동의합니다.",
+                    key=f"delete-confirm-{listing['id']}",
                 )
-                st.rerun()
+                if st.button(
+                    "삭제",
+                    type="primary",
+                    disabled=not delete_confirmed,
+                    use_container_width=True,
+                    key=f"delete-listing-{listing['id']}",
+                ):
+                    result = delete_listing(listing["id"])
+                    st.session_state.listing_message = result.get(
+                        "message", "청약정보를 삭제했습니다."
+                    )
+                    st.rerun()
 
     # 검색 결과일 때는 페이지 이동 버튼을 두지 않습니다.
     if total_pages is None:
@@ -309,65 +418,71 @@ def show_listing_edit(listing_id: int) -> None:
         st.caption("등록된 이미지가 없습니다.")
 
     with st.form("listing_edit_form"):
-        title = st.text_input("공고 제목", value=listing.get("title") or "", key="edit-title")
+        title = st.text_input("공고 제목", value=listing.get("title") or "", key=f"edit-title-{listing_id}")
         housing_name = st.text_input(
-            "주택명", value=listing.get("housing_name") or "", key="edit-housing-name"
+            "주택명", value=listing.get("housing_name") or "", key=f"edit-housing-name-{listing_id}"
         )
         area_sqm = st.number_input(
             "면적(㎡)",
             min_value=0.01,
             value=float(listing.get("area_sqm") or 0.01),
-            key="edit-area-sqm",
+            key=f"edit-area-sqm-{listing_id}",
         )
         recruitment_count = st.number_input(
             "모집 인원",
             min_value=1,
             step=1,
             value=int(listing.get("recruitment_count") or 1),
-            key="edit-recruitment-count",
+            key=f"edit-recruitment-count-{listing_id}",
         )
         location = st.selectbox(
             "지역(서울 자치구)",
             SEOUL_DISTRICTS,
             index=location_index,
             placeholder="자치구를 선택해 주세요",
-            key="edit-location",
+            key=f"edit-location-{listing_id}",
+        )
+        detail_address = st.text_input(
+            "상세주소 (선택)",
+            value=listing.get("detail_address") or "",
+            placeholder="예: 서울 강남구 도곡로 464",
+            key=f"edit-detail-address-{listing_id}",
         )
         deposit = st.number_input(
             "보증금",
             min_value=0,
             step=10000,
             value=int(listing.get("deposit") or 0),
-            key="edit-deposit",
+            key=f"edit-deposit-{listing_id}",
         )
         monthly_rent = st.number_input(
             "월세",
             min_value=0,
             step=10000,
             value=int(listing.get("monthly_rent") or 0),
-            key="edit-monthly-rent",
+            key=f"edit-monthly-rent-{listing_id}",
         )
         application_start_date = st.date_input(
             "신청 시작일",
             value=to_date(listing.get("application_start_date")),
-            key="edit-start-date",
+            key=f"edit-start-date-{listing_id}",
         )
         application_end_date = st.date_input(
             "신청 종료일",
             value=to_date(listing.get("application_end_date")),
-            key="edit-end-date",
+            key=f"edit-end-date-{listing_id}",
         )
         description = st.text_area(
-            "상세 설명", value=listing.get("description") or "", key="edit-description"
+            "상세 설명", value=listing.get("description") or "", key=f"edit-description-{listing_id}"
         )
         image_file = st.file_uploader(
             "새 이미지 (선택, 최대 5MB) - 고르지 않으면 기존 이미지를 그대로 둡니다",
             type=["jpg", "jpeg", "png", "webp"],
-            key="edit-image",
+            key=f"edit-image-{listing_id}",
         )
 
         source_url = st.text_input(
-            "원문 URL", value=listing.get("source_url") or "", key="edit-source-url"
+            "원문 URL", value=listing.get("source_url") or "", key=f"edit-source-url-{listing_id}"
         )
 
         # 두 버튼을 그냥 두면 세로로 쌓이므로, 목록 화면의 페이지 이동 버튼처럼
@@ -414,6 +529,7 @@ def show_listing_edit(listing_id: int) -> None:
         "area_sqm": str(area_sqm),
         "recruitment_count": str(int(recruitment_count)),
         "location": location,
+        "detail_address": detail_address.strip(),
         "deposit": str(int(deposit)),
         "monthly_rent": str(int(monthly_rent)),
         "application_start_date": application_start_date.isoformat(),
