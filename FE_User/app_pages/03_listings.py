@@ -8,6 +8,7 @@ from core.api_client import BackendAPIError
 from core.auth import is_logged_in
 from core.area_format import format_area
 from core.constants import SEOUL_DISTRICTS
+from core.dday import dday_label, dim_if_closed, is_closed
 
 
 st.title("청약정보 조회")
@@ -42,31 +43,50 @@ try:
     if not listings:
         st.info("조회된 청약정보가 없습니다.")
     else:
-        st.caption(f"총 {len(listings)}건 (최신순)")
+        st.caption(f"총 {len(listings)}건 (마감이 가까운 순)")
 
         for listing in listings:
+            end_date = listing.get("application_end_date")
+            closed = is_closed(end_date)
+            remaining = dday_label(end_date)
+
+            # 신청이 끝난 공고는 글자를 흐린 회색으로 두어 한눈에 구분되게 합니다.
+            def dim(text: object) -> str:
+                return dim_if_closed(text, closed)
+
             with st.container(border=True):
-                st.subheader(listing.get("title") or "제목 없음")
+                st.markdown(f"### {dim(listing.get('title') or '제목 없음')}")
                 if listing.get("image_url"):
                     st.image(listing["image_url"], width=300)
-                st.write(
-                    f"주택명: {listing.get('housing_name') or '-'}  |  "
-                    f"자치구: {listing.get('location') or '-'}"
+                st.markdown(
+                    dim(
+                        f"주택명: {listing.get('housing_name') or '-'}  |  "
+                        f"자치구: {listing.get('location') or '-'}"
+                    )
                 )
-                st.write(
-                    f"면적: {format_area(listing.get('area_sqm'))}  |  "
-                    f"모집 인원: {listing.get('recruitment_count') or '-'}명"
+                st.markdown(
+                    dim(
+                        f"면적: {format_area(listing.get('area_sqm'))}  |  "
+                        f"모집 인원: {listing.get('recruitment_count') or '-'}명"
+                    )
                 )
-                st.write(
-                    f"보증금: {int(listing.get('deposit') or 0):,}원  |  "
-                    f"월세: {int(listing.get('monthly_rent') or 0):,}원"
+                st.markdown(
+                    dim(
+                        f"보증금: {int(listing.get('deposit') or 0):,}원  |  "
+                        f"월세: {int(listing.get('monthly_rent') or 0):,}원"
+                    )
                 )
                 st.caption(
                     f"신청 기간: {listing.get('application_start_date') or '-'} ~ "
-                    f"{listing.get('application_end_date') or '-'}"
+                    f"{end_date or '-'}"
                 )
+                if remaining:
+                    if closed:
+                        st.caption(f"신청 마감 ({remaining})")
+                    else:
+                        st.warning(f"신청 마감까지 {remaining}")
                 if listing.get("description"):
-                    st.write(listing["description"])
+                    st.markdown(dim(listing["description"]))
 
                 if listing.get("source_url"):
                     st.link_button("공고 원문 보기", listing["source_url"])
