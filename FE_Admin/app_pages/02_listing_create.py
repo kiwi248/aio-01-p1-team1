@@ -2,16 +2,18 @@
 
 import streamlit as st
 
-from clients.listing_client import create_listing, upload_listing_image
+from clients.listing_client import create_listing, upload_listing_images
 from core.amount_format import describe_amount
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
 from core.constants import SEOUL_DISTRICTS
 from core.create_form import current_nonce, field_key, reset_form_state
-
-
-# 이미지 크기 제한입니다. 백엔드에서도 같은 값으로 다시 검사합니다.
-MAX_IMAGE_SIZE = 5 * 1024 * 1024
+from core.image_gallery import (
+    MAX_IMAGE_COUNT,
+    check_upload,
+    describe_size,
+    rows_of,
+)
 
 st.title("청약정보 등록")
 
@@ -60,11 +62,32 @@ st.caption(describe_amount(monthly_rent))
 application_start_date = st.date_input("신청 시작일", key=field_key("start-date", nonce))
 application_end_date = st.date_input("신청 종료일", key=field_key("end-date", nonce))
 description = st.text_area("상세 설명", key=field_key("description", nonce))
-image_file = st.file_uploader(
-    "이미지 (선택, 최대 5MB)",
+image_files = st.file_uploader(
+    f"사진 (선택, 최대 {MAX_IMAGE_COUNT}장 · 한 장 5MB)",
     type=["jpg", "jpeg", "png", "webp"],
+    accept_multiple_files=True,
     key=field_key("image", nonce),
 )
+image_files = image_files or []
+
+# 고른 사진을 바로 보여 줍니다. 스무 장까지 올 수 있어 줄로 끊어 놓습니다.
+if image_files:
+    total_size = sum(getattr(file, "size", 0) for file in image_files)
+    st.caption(
+        f"{len(image_files)}장 선택 ({describe_size(total_size)})"
+        "  ·  맨 앞 사진이 목록 카드에 보입니다."
+    )
+
+    for row in rows_of([file.name for file in image_files]):
+        columns = st.columns(len(row))
+        for column, name in zip(columns, row):
+            file = next(f for f in image_files if f.name == name)
+            column.image(file, use_container_width=True)
+
+    # 보내기 전에 먼저 막아 줍니다. 수십 MB를 다 보낸 뒤 거절당하면 오래 기다리게 됩니다.
+    upload_problem = check_upload(image_files)
+    if upload_problem:
+        st.error(upload_problem)
 source_url = st.text_input(
     "원문 URL",
     placeholder="예: https://apply.lh.or.kr/...",
@@ -96,12 +119,8 @@ if submitted:
         st.error("공고 제목, 주택명, 자치구, 상세 설명, 원문 URL을 모두 입력해 주세요.")
     elif application_end_date < application_start_date:
         st.error("신청 종료일은 신청 시작일보다 빠를 수 없습니다.")
-    elif image_file is not None and image_file.size > MAX_IMAGE_SIZE:
-        st.error(
-            f"이미지 크기는 5MB를 넘을 수 없습니다. "
-            f"(선택한 파일: {image_file.size / 1024 / 1024:.1f}MB) "
-            f"크기를 줄이거나 이미지를 빼고 등록해 주세요."
-        )
+    elif check_upload(image_files):
+        st.error(check_upload(image_files))
     else:
         payload = {
             "title": title.strip(),
@@ -116,14 +135,19 @@ if submitted:
             "application_end_date": application_end_date.isoformat(),
             "description": description.strip(),
             "image_url": None,
+            "image_urls": [],
             "source_url": source_url.strip(),
         }
         try:
-            # 이미지를 고른 경우에만 먼저 업로드하고, 받은 URL을 payload에 넣습니다.
-            if image_file is not None:
-                with st.spinner("이미지를 업로드하는 중..."):
-                    upload_result = upload_listing_image(image_file)
-                payload["image_url"] = (upload_result.get("data") or {}).get("image_url")
+            # 사진을 고른 경우에만 먼저 올리고, 받은 URL을 payload에 넣습니다.
+            # 한 번에 보내므로 도중에 실패하면 백엔드가 올라간 파일을 도로 지웁니다.
+            if image_files:
+                with st.spinner(f"사진 {len(image_files)}장을 업로드하는 중..."):
+                    upload_result = upload_listing_images(image_files)
+                image_urls = (upload_result.get("data") or {}).get("image_urls") or []
+                payload["image_urls"] = image_urls
+                # 맨 앞 사진이 목록 카드에 보일 대표 이미지가 됩니다.
+                payload["image_url"] = image_urls[0] if image_urls else None
 
             result = create_listing(payload)
             if result.get("success"):
