@@ -224,6 +224,7 @@ def remove_listing_image(listing_id: int) -> ApiResponse:
 @admin_router.put("/listings/{listing_id}/images")
 async def replace_listing_images(
     listing_id: int,
+    keep_count: Annotated[int, Form(ge=0)],
     kept_image_urls: Annotated[list[str], Form()] = [],
     images: Annotated[list[UploadFile], File()] = [],
 ) -> ApiResponse:
@@ -235,11 +236,28 @@ async def replace_listing_images(
 
     남길 사진(kept_image_urls)에 새로 올린 사진을 이어 붙인 것이
     최종 목록이 됩니다. 첫 장이 대표 이미지가 됩니다.
+
+    keep_count는 "남길 사진이 몇 장인지" 화면이 함께 알려 주는 값입니다.
+    이 값을 반드시 받도록 한 이유가 있습니다.
+    보내는 형식이 조금만 틀려도 kept_image_urls가 통째로 사라지는데,
+    그러면 서버는 "남길 사진 없음"으로 알아듣고 사진을 전부 지웁니다.
+    실제로 그렇게 사진 열 장이 한 번에 사라진 적이 있습니다.
+    장수를 함께 받아 맞춰 보면, 값이 사라진 요청은 지우기 전에 걸러집니다.
     """
 
     current_listing = listing_get(listing_id)
     if current_listing is None:
         raise HTTPException(status_code=404, detail="청약정보를 찾을 수 없습니다.")
+
+    # 화면이 말한 장수와 실제로 도착한 장수가 다르면 중간에 값이 샌 것입니다.
+    # 이때 그냥 진행하면 남겨야 할 사진까지 지웁니다.
+    if keep_count != len(kept_image_urls):
+        raise HTTPException(
+            status_code=400,
+            detail=f"남길 사진 목록이 온전하지 않습니다. "
+            f"({keep_count}장이라고 했는데 {len(kept_image_urls)}장이 도착했습니다) "
+            f"아무것도 지우지 않았습니다.",
+        )
 
     # 화면이 엉뚱한 URL을 보내도 이 공고의 사진만 남깁니다.
     current_images = list(current_listing.images)

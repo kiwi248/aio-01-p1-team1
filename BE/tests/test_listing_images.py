@@ -197,7 +197,7 @@ class ListingImagesApiTest(unittest.TestCase):
         ) as fake_delete:
             response = client.put(
                 "/admin/listings/1/images",
-                data={"kept_image_urls": [PHOTO_A, PHOTO_C]},
+                data={"kept_image_urls": [PHOTO_A, PHOTO_C], "keep_count": 2},
             )
 
         self.assertEqual(response.status_code, 200)
@@ -221,7 +221,7 @@ class ListingImagesApiTest(unittest.TestCase):
         ) as fake_update, patch("app.routers.admin_router.delete_listing_image"):
             client.put(
                 "/admin/listings/1/images",
-                data={"kept_image_urls": [PHOTO_A, "https://남의공고.com/x.jpg"]},
+                data={"kept_image_urls": [PHOTO_A, "https://남의공고.com/x.jpg"], "keep_count": 2},
             )
 
         self.assertEqual(fake_update.call_args[0][1].image_urls, [PHOTO_A])
@@ -240,12 +240,60 @@ class ListingImagesApiTest(unittest.TestCase):
         ) as fake_update, patch(
             "app.routers.admin_router.delete_listing_image"
         ) as fake_delete:
-            client.put("/admin/listings/1/images", data={})
+            client.put("/admin/listings/1/images", data={"keep_count": 0})
 
         saved = fake_update.call_args[0][1]
         self.assertEqual(saved.image_urls, [])
         self.assertIsNone(saved.image_url)
         self.assertEqual(fake_delete.call_count, 2)
+
+    def test_남길_사진이_중간에_사라지면_아무것도_지우지_않는다(self):
+        """실제로 사진 열 장이 한 번에 사라진 적이 있습니다.
+
+        화면이 보내는 형식이 틀려 kept_image_urls가 서버에 하나도
+        도착하지 않았고, 서버는 "남길 사진 없음"으로 알아들었습니다.
+        장수를 함께 받아 맞춰 보면 지우기 전에 걸러집니다.
+        """
+        from fastapi.testclient import TestClient
+
+        from app.main import app
+
+        client = TestClient(app)
+        current = self.make_listing([PHOTO_A, PHOTO_B, PHOTO_C], PHOTO_A)
+
+        with patch("app.routers.admin_router.listing_get", return_value=current), patch(
+            "app.routers.admin_router.listing_update"
+        ) as fake_update, patch(
+            "app.routers.admin_router.delete_listing_image"
+        ) as fake_delete:
+            # 3장을 남기겠다고 했는데 목록이 오지 않은 상황입니다.
+            response = client.put(
+                "/admin/listings/1/images", data={"keep_count": 3}
+            )
+
+        self.assertEqual(response.status_code, 400)
+        fake_update.assert_not_called()
+        fake_delete.assert_not_called()
+
+    def test_장수를_아예_보내지_않으면_거절한다(self):
+        """본문이 통째로 사라진 요청입니다. 조용히 지우면 안 됩니다."""
+        from fastapi.testclient import TestClient
+
+        from app.main import app
+
+        client = TestClient(app)
+        current = self.make_listing([PHOTO_A, PHOTO_B], PHOTO_A)
+
+        with patch("app.routers.admin_router.listing_get", return_value=current), patch(
+            "app.routers.admin_router.listing_update"
+        ) as fake_update, patch(
+            "app.routers.admin_router.delete_listing_image"
+        ) as fake_delete:
+            response = client.put("/admin/listings/1/images")
+
+        self.assertEqual(response.status_code, 422)
+        fake_update.assert_not_called()
+        fake_delete.assert_not_called()
 
     def test_없는_공고면_404다(self):
         from fastapi.testclient import TestClient
@@ -255,7 +303,7 @@ class ListingImagesApiTest(unittest.TestCase):
         client = TestClient(app)
 
         with patch("app.routers.admin_router.listing_get", return_value=None):
-            response = client.put("/admin/listings/999/images", data={})
+            response = client.put("/admin/listings/999/images", data={"keep_count": 0})
 
         self.assertEqual(response.status_code, 404)
 

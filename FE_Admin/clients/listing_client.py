@@ -54,7 +54,16 @@ def replace_listing_images(listing_id: int, kept_image_urls: list[str], images: 
         )
         for image in images
     ]
-    data = [("kept_image_urls", url) for url in kept_image_urls]
+    # 같은 이름으로 여러 개를 보낼 때는 사전에 목록을 담아야 합니다.
+    # [("kept_image_urls", url), ...] 처럼 목록으로 넘기면 httpx가 이것을
+    # 폼 값이 아니라 본문 그 자체로 보아, 서버에 값이 하나도 가지 않습니다.
+    # 그러면 서버는 "남길 사진 없음"으로 알아듣고 사진을 전부 지웁니다.
+    # 몇 장을 남길 셈인지 함께 보냅니다. 서버가 도착한 개수와 맞춰 보고,
+    # 다르면 아무것도 지우지 않습니다.
+    data = {
+        "kept_image_urls": list(kept_image_urls),
+        "keep_count": len(kept_image_urls),
+    }
     return request(
         "PUT",
         f"/admin/listings/{listing_id}/images",
