@@ -3,6 +3,7 @@
 import streamlit as st
 from supabase import AuthApiError
 
+from core.session_restore import read_tokens, restore_session, should_restore
 from core.supabase_client import get_supabase
 
 
@@ -16,6 +17,47 @@ def init_state(
     st.session_state.setdefault("email", stored_email)
     st.session_state.setdefault("access_token", "")
     st.session_state.setdefault("refresh_token", "")
+    # 이번 Streamlit 세션에서 복원을 이미 시도했는지 기억합니다.
+    # 화면이 다시 그려질 때마다 Supabase에 다시 묻지 않기 위해서입니다.
+    st.session_state.setdefault("session_restore_tried", False)
+
+
+def restore_login(stored_values: object) -> str:
+    """브라우저에 저장해 둔 토큰으로 로그인 상태를 되살립니다.
+
+    새로고침 직후에만 한 번 동작하며, 돌려주는 값은
+    "skipped" / "empty" / "restored" / "invalid" 중 하나입니다.
+    """
+
+    access_token, refresh_token = read_tokens(stored_values)
+
+    if not should_restore(
+        is_logged_in=is_logged_in(),
+        already_tried=st.session_state.session_restore_tried,
+        has_tokens=bool(access_token and refresh_token),
+    ):
+        return "skipped"
+
+    # 결과와 상관없이 이번 세션에서는 다시 시도하지 않습니다.
+    st.session_state.session_restore_tried = True
+
+    result = restore_session(
+        access_token,
+        refresh_token,
+        get_supabase().auth.set_session,
+    )
+
+    if result["status"] != "restored":
+        return result["status"]
+
+    st.session_state.loginout = "login"
+    st.session_state.user_id = result["user_id"]
+    st.session_state.email = result["email"]
+    # 세션이 갱신됐을 수 있으므로 돌려받은 토큰으로 바꿔 둡니다.
+    st.session_state.access_token = result["access_token"]
+    st.session_state.refresh_token = result["refresh_token"]
+
+    return "restored"
 
 def sign_up(
     email: str,
@@ -77,6 +119,9 @@ def logout() -> None:
     st.session_state.email = ""
     st.session_state.access_token = ""
     st.session_state.refresh_token = ""
+    # 로그아웃한 뒤 새로고침했을 때 다시 복원되지 않도록 막습니다.
+    # 브라우저에 저장된 토큰은 app.py에서 지웁니다.
+    st.session_state.session_restore_tried = True
 
 
 def is_logged_in() -> bool:

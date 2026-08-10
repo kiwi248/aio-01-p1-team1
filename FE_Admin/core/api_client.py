@@ -3,9 +3,21 @@
 from typing import Any
 
 import httpx
+import streamlit as st
 
 
-BACKEND_URL = "http://127.0.0.1:8000"
+def _get_backend_url() -> str:
+    """배포 환경(Streamlit Cloud)에서는 secrets의 BACKEND_URL을 쓰고,
+    로컬 개발 환경(secrets 미설정)에서는 로컬 백엔드 주소를 씁니다.
+    """
+
+    try:
+        return st.secrets["BACKEND_URL"]
+    except Exception:
+        return "http://127.0.0.1:8000"
+
+
+BACKEND_URL = _get_backend_url()
 REQUEST_TIMEOUT = 15.0
 
 
@@ -18,6 +30,8 @@ def request(
     path: str,
     json: dict[str, Any] | None = None,
     params: dict[str, Any] | None = None,
+    files: dict[str, Any] | None = None,
+    data: dict[str, Any] | None = None,
 ):
     if params is not None:
         # httpx가 None 값을 빈 문자열로 보내면 백엔드 쿼리 파라미터 검증이 실패하므로 제거합니다.
@@ -29,6 +43,8 @@ def request(
             f"{BACKEND_URL}{path}",
             json=json,
             params=params,
+            files=files,
+            data=data,
             timeout=REQUEST_TIMEOUT,
         )
     except httpx.TimeoutException as error:

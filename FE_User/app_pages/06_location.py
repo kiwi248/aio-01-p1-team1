@@ -158,7 +158,7 @@ if matching_listings:
     )
 
     try:
-        with st.spinner("공고 주소와 주변 지하철역을 검색하는 중입니다..."):
+        with st.spinner("공고 주소와 주변 생활권을 검색하는 중입니다..."):
             location_response = geocode_location(listing_address)
             location = location_response.get("data") or {}
 
@@ -169,13 +169,17 @@ if matching_listings:
                 st.error("공고 주소의 좌표를 확인할 수 없습니다.")
                 st.stop()
 
-            subway_response = get_nearby_subways(
-                latitude=latitude,
-                longitude=longitude,
-                radius_m=radius_m,
-                limit=DEFAULT_STATION_LIMIT,
-            )
-            stations = subway_response.get("data") or []
+        facility_response = get_nearby_facilities(
+            latitude=latitude,
+            longitude=longitude,
+            radius_m=radius_m,
+            limit=DEFAULT_FACILITY_LIMIT,
+)
+        facilities = facility_response.get("data") or {}
+
+        stations = facilities.get("subways") or []
+        marts = facilities.get("marts") or []
+        hospitals = facilities.get("hospitals") or []
     except BackendAPIError as error:
         st.error(str(error))
         st.stop()
