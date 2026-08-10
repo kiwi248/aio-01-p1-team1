@@ -1,4 +1,6 @@
 # listing_service.py
+from datetime import date
+
 from app.core.supabase_config import get_supabase
 from app.schemas.listing_schema import ListingCreate, ListingPage, ListingPublic
 
@@ -63,15 +65,51 @@ def listing_clear_image(listing_id: int) -> ListingPublic | None:
     return ListingPublic.model_validate(result.data[0])
 
 
+def move_closed_to_end(
+    listings: list[ListingPublic], today: date | None = None
+) -> list[ListingPublic]:
+    """신청이 끝난 공고를 목록 맨 뒤로 보냅니다.
+
+    아직 신청할 수 있는 공고를 먼저 보여 주려는 것입니다.
+    받은 목록은 이미 마감이 가까운 순으로 정렬돼 있다고 봅니다.
+    끝난 공고끼리는 최근에 끝난 것부터 놓습니다.
+    """
+
+    if today is None:
+        today = date.today()
+
+    still_open: list[ListingPublic] = []
+    closed: list[ListingPublic] = []
+
+    for listing in listings:
+        end_date = listing.application_end_date
+        if end_date is not None and end_date < today:
+            closed.append(listing)
+        else:
+            still_open.append(listing)
+
+    # 들어온 순서가 마감일 오름차순이므로, 뒤집으면 최근에 끝난 것부터가 됩니다.
+    closed.reverse()
+    return still_open + closed
+
+
 def listing_get_all() -> list[ListingPublic]:
+    """마감이 가까운 순으로 돌려줍니다.
+
+    같은 날 마감이면 나중에 등록한 공고를 앞에 둡니다.
+    이미 신청이 끝난 공고는 맨 뒤로 보냅니다.
+    """
     supabase = get_supabase()
     result = (
         supabase.table("listings")
         .select("*")
-        .order("application_start_date", desc=True)
+        .order("application_end_date")
+        .order("created_at", desc=True)
+        .order("id", desc=True)
         .execute()
     )
-    return [ListingPublic.model_validate(item) for item in result.data]
+    listings = [ListingPublic.model_validate(item) for item in result.data]
+    return move_closed_to_end(listings)
 
 
 def listing_get_page(page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> ListingPage:
@@ -158,8 +196,15 @@ def listing_search(
     if max_monthly_rent is not None:
         query = query.lte("monthly_rent", max_monthly_rent)
 
-    result = query.order("application_start_date", desc=True).execute()
-    return [ListingPublic.model_validate(item) for item in result.data]
+    # 목록과 같은 기준입니다. 마감이 가까운 순, 같으면 등록이 최신인 순입니다.
+    result = (
+        query.order("application_end_date")
+        .order("created_at", desc=True)
+        .order("id", desc=True)
+        .execute()
+    )
+    listings = [ListingPublic.model_validate(item) for item in result.data]
+    return move_closed_to_end(listings)
 
 
 def listing_delete(listing_id: int) -> ListingPublic | None:

@@ -15,6 +15,7 @@ from clients.listing_client import (
 )
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
+from core.area_format import format_area
 from core.constants import SEOUL_DISTRICTS
 from core.image_delete import should_show_delete_button, summarize_result
 from core.page_params import (
@@ -243,8 +244,10 @@ def show_listing_list() -> None:
                 f"주택명: {listing.get('housing_name') or '-'}  |  "
                 f"자치구: {listing.get('location') or '-'}"
             )
+            if listing.get("detail_address"):
+                st.write(f"주소: {listing['detail_address']}")
             st.write(
-                f"면적: {listing.get('area_sqm') or '-'}㎡  |  "
+                f"면적: {format_area(listing.get('area_sqm'))}  |  "
                 f"모집 인원: {listing.get('recruitment_count') or '-'}명"
             )
             st.write(
@@ -401,6 +404,12 @@ def show_listing_edit(listing_id: int) -> None:
             placeholder="자치구를 선택해 주세요",
             key=f"edit-location-{listing_id}",
         )
+        detail_address = st.text_input(
+            "상세주소 (선택)",
+            value=listing.get("detail_address") or "",
+            placeholder="예: 서울 강남구 도곡로 464",
+            key=f"edit-detail-address-{listing_id}",
+        )
         deposit = st.number_input(
             "보증금",
             min_value=0,
@@ -482,6 +491,7 @@ def show_listing_edit(listing_id: int) -> None:
         "area_sqm": str(area_sqm),
         "recruitment_count": str(int(recruitment_count)),
         "location": location,
+        "detail_address": detail_address.strip(),
         "deposit": str(int(deposit)),
         "monthly_rent": str(int(monthly_rent)),
         "application_start_date": application_start_date.isoformat(),

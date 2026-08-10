@@ -3,9 +3,21 @@
 from typing import Any
 
 import httpx
+import streamlit as st
 
 
-BACKEND_URL = "http://127.0.0.1:8000"
+def _get_backend_url() -> str:
+    """배포 환경(Streamlit Cloud)에서는 secrets의 BACKEND_URL을 쓰고,
+    로컬 개발 환경(secrets 미설정)에서는 로컬 백엔드 주소를 씁니다.
+    """
+
+    try:
+        return st.secrets["BACKEND_URL"]
+    except Exception:
+        return "http://127.0.0.1:8000"
+
+
+BACKEND_URL = _get_backend_url()
 REQUEST_TIMEOUT = 15.0
 
 

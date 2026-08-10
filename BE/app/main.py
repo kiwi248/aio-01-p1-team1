@@ -1,6 +1,8 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.log_store import start_simulator_thread
 from app.exceptions.handlers import register_exception_handlers
@@ -46,6 +48,23 @@ app = FastAPI(
     title="공공임대 청약 통합 안내 서비스",
     openapi_tags=tags_metadata,
     lifespan=lifespan,
+)
+
+# Streamlit Cloud(FE_Admin, FE_User)는 백엔드와 다른 도메인에서 API를 호출하므로
+# CORS를 허용해야 합니다. ALLOWED_ORIGINS는 쉼표로 구분된 도메인 목록이며,
+# 아직 배포 주소를 모르는 개발 단계에서는 기본값 "*"(전체 허용)를 씁니다.
+# 쿠키/세션 인증을 쓰지 않는 API라 "*"를 써도 자격 증명이 새는 위험은 없습니다.
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",")
+    if origin.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 register_exception_handlers(app)

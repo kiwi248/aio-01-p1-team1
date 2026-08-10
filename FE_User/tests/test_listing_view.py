@@ -4,7 +4,9 @@
 import unittest
 
 from core.listing_view import (
+    address_line,
     card_title,
+    dday_badge,
     description_preview,
     format_won,
     period_line,
@@ -23,6 +25,7 @@ def sample_listing(**overrides) -> dict:
         "monthly_rent": 125500,
         "application_start_date": "2026-08-18",
         "application_end_date": "2026-08-20",
+        "detail_address": "서울시 강서구 개화동로21길 49 (방화동 847)",
         "description": "신청자격 : 서울 거주 1인 무주택세대구성원\n소득기준 : 70% 이하",
     }
     listing.update(overrides)
@@ -49,8 +52,13 @@ class CardTitleTest(unittest.TestCase):
 class SummaryLineTest(unittest.TestCase):
     def test_자치구_면적_모집_인원을_한_줄로_묶는다(self):
         self.assertEqual(
-            summary_line(sample_listing()), "강서구  ·  전용 13.98㎡  ·  14호 모집"
+            summary_line(sample_listing()),
+            "강서구  ·  전용 13.98㎡ (약 4.2평)  ·  14호 모집",
         )
+
+    def test_면적에_평수가_함께_나온다(self):
+        """평수 표시(#41)가 새 카드에서도 유지되어야 합니다."""
+        self.assertIn("약 4.2평", summary_line(sample_listing()))
 
     def test_값이_없는_항목은_빼고_보여_준다(self):
         listing = sample_listing(area_sqm=None, recruitment_count=None)
@@ -101,6 +109,43 @@ class DescriptionPreviewTest(unittest.TestCase):
         original = listing["description"]
         description_preview(listing)
         self.assertEqual(listing["description"], original)
+
+
+class AddressLineTest(unittest.TestCase):
+    def test_주소가_있으면_보여_준다(self):
+        self.assertEqual(
+            address_line(sample_listing()),
+            "📍 서울시 강서구 개화동로21길 49 (방화동 847)",
+        )
+
+    def test_주소가_없으면_빈_문구다(self):
+        self.assertEqual(address_line(sample_listing(detail_address=None)), "")
+        self.assertEqual(address_line(sample_listing(detail_address="   ")), "")
+        self.assertEqual(address_line({}), "")
+
+
+class DdayBadgeTest(unittest.TestCase):
+    """마감이 코앞이면 붉게, 여유가 있으면 푸르게 보여 줍니다."""
+
+    def test_마감이_코앞이면_붉게_보여_준다(self):
+        self.assertEqual(dday_badge("D-3", closed=False), ":red[**D-3**]")
+        self.assertEqual(dday_badge("D-1", closed=False), ":red[**D-1**]")
+
+    def test_오늘_마감은_붉게_보여_준다(self):
+        self.assertEqual(dday_badge("D-DAY", closed=False), ":red[**D-DAY**]")
+
+    def test_여유가_있으면_푸르게_보여_준다(self):
+        self.assertEqual(dday_badge("D-10", closed=False), ":blue[**D-10**]")
+
+    def test_마감된_공고는_흐리게_보여_준다(self):
+        self.assertEqual(dday_badge("마감", closed=True), ":gray[마감]")
+
+    def test_남은_날수를_모르면_빈_문구다(self):
+        self.assertEqual(dday_badge(None, closed=False), "")
+        self.assertEqual(dday_badge("", closed=False), "")
+
+    def test_알_수_없는_문구도_안전하게_처리한다(self):
+        self.assertEqual(dday_badge("D-알수없음", closed=False), ":blue[**D-알수없음**]")
 
 
 if __name__ == "__main__":
