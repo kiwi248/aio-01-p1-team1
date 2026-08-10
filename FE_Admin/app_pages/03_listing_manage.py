@@ -21,6 +21,8 @@ from core.listing_view import (
     address_line,
     card_title,
     description_preview,
+    description_lines,
+    format_description_line,
     format_won,
     period_line,
     summary_line,
@@ -277,7 +279,10 @@ def show_listing_list() -> None:
             preview = description_preview(listing)
             if preview:
                 with st.expander(f"상세 정보  ·  {preview}"):
-                    st.write(listing["description"])
+                    # 줄바꿈 하나는 마크다운에서 공백이 되어 항목이 한 줄로 붙습니다.
+                    # 줄마다 따로 그려 항목이 구분되게 합니다.
+                    for line in description_lines(listing):
+                        st.markdown(format_description_line(line))
 
             link_column, edit_column = st.columns(2)
 

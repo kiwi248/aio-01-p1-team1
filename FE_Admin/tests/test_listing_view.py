@@ -8,7 +8,9 @@ import unittest
 from core.listing_view import (
     address_line,
     card_title,
+    description_lines,
     description_preview,
+    format_description_line,
     format_won,
     period_line,
     summary_line,
@@ -123,6 +125,66 @@ class AddressLineTest(unittest.TestCase):
         self.assertEqual(address_line(sample_listing(detail_address=None)), "")
         self.assertEqual(address_line(sample_listing(detail_address="   ")), "")
         self.assertEqual(address_line({}), "")
+
+
+class DescriptionLinesTest(unittest.TestCase):
+    """설명이 한 줄로 붙어 나오지 않도록 줄 단위로 나눕니다."""
+
+    def test_줄_단위로_나눈다(self):
+        lines = description_lines(sample_listing())
+
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines[0], "신청자격 : 서울 거주 1인 무주택세대구성원")
+        self.assertEqual(lines[1], "소득기준 : 70% 이하")
+
+    def test_빈_줄은_버린다(self):
+        listing = sample_listing(description="가 : 1\n\n\n나 : 2")
+
+        self.assertEqual(description_lines(listing), ["가 : 1", "나 : 2"])
+
+    def test_앞뒤_공백을_없앤다(self):
+        listing = sample_listing(description="  가 : 1  \n  나 : 2  ")
+
+        self.assertEqual(description_lines(listing), ["가 : 1", "나 : 2"])
+
+    def test_설명이_없으면_빈_목록이다(self):
+        self.assertEqual(description_lines(sample_listing(description="")), [])
+        self.assertEqual(description_lines({}), [])
+
+    def test_원래_설명을_바꾸지_않는다(self):
+        listing = sample_listing()
+        original = listing["description"]
+
+        description_lines(listing)
+
+        self.assertEqual(listing["description"], original)
+
+
+class FormatDescriptionLineTest(unittest.TestCase):
+    def test_항목_이름을_굵게_만든다(self):
+        self.assertEqual(
+            format_description_line("신청자격 : 서울 거주 1인 무주택세대구성원"),
+            "**신청자격**  서울 거주 1인 무주택세대구성원",
+        )
+
+    def test_콜론_앞에_공백이_없어도_나눈다(self):
+        self.assertEqual(format_description_line("소득기준: 70% 이하"), "**소득기준**  70% 이하")
+
+    def test_콜론이_없으면_그대로_둔다(self):
+        self.assertEqual(format_description_line("안내 문구입니다"), "안내 문구입니다")
+
+    def test_값에_콜론이_또_있어도_첫_번째만_나눈다(self):
+        self.assertEqual(
+            format_description_line("문의 : 전화 : 1600-3456"),
+            "**문의**  전화 : 1600-3456",
+        )
+
+    def test_값이_비어_있으면_그대로_둔다(self):
+        self.assertEqual(format_description_line("신청자격 :"), "신청자격 :")
+
+    def test_빈_값도_안전하다(self):
+        self.assertEqual(format_description_line(""), "")
+        self.assertEqual(format_description_line(None), "")
 
 
 if __name__ == "__main__":

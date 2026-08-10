@@ -111,3 +111,42 @@ def description_preview(listing: dict, limit: int = 60) -> str:
         return first_line
 
     return first_line[:limit].rstrip() + "…"
+
+
+def description_lines(listing: dict) -> list[str]:
+    """상세 설명을 줄 단위로 나눕니다.
+
+    설명은 "신청자격 : ...", "소득기준 : ..." 처럼 줄로 나뉘어 저장돼 있습니다.
+    그런데 마크다운은 줄바꿈 하나를 공백으로 바꿔 버려, 그대로 넘기면
+    모든 항목이 한 줄에 붙어 나옵니다. 그래서 줄로 잘라 따로 그립니다.
+    빈 줄은 버립니다.
+    """
+
+    description = (listing.get("description") or "").strip()
+    if not description:
+        return []
+
+    return [line.strip() for line in description.splitlines() if line.strip()]
+
+
+def format_description_line(line: object) -> str:
+    """"신청자격 : 값" 을 "**신청자격** 값" 으로 바꿉니다.
+
+    항목 이름을 굵게 해서 눈으로 훑기 쉽게 합니다.
+    콜론이 없는 줄은 그대로 둡니다.
+    """
+
+    text = ("" if line is None else str(line)).strip()
+    if not text:
+        return ""
+
+    for separator in (" : ", ": ", " :", ":"):
+        if separator in text:
+            label, _, value = text.partition(separator)
+            label = label.strip()
+            value = value.strip()
+            if label and value:
+                return f"**{label}**  {value}"
+            break
+
+    return text
