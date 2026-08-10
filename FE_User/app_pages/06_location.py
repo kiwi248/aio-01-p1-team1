@@ -8,7 +8,14 @@ from clients.location_client import (
 )
 from core.api_client import BackendAPIError
 from core.location_map import build_location_deck
-
+from core.listing_view import (
+    address_line,
+    description_lines,
+    format_description_line,
+    format_won,
+    period_line,
+    summary_line,
+)
 
 DEFAULT_RADIUS_M = 2000
 DEFAULT_FACILITY_LIMIT = 3
@@ -18,15 +25,6 @@ RADIUS_OPTIONS = {
     "2km": 2000,
     "3km": 3000,
 }
-
-
-def format_distance(distance_m: int) -> str:
-    """미터 거리를 화면에 읽기 좋은 문자열로 바꿉니다."""
-
-    if distance_m >= 1000:
-        return f"{distance_m / 1000:.1f}km"
-
-    return f"{distance_m}m"
 
 
 def normalize_search_text(value: object) -> str:
@@ -87,44 +85,59 @@ def listing_label(listing: dict) -> str:
     return f"{display_name} | {detail_address}"
 
 
-def render_facility_section(
-    title: str,
-    icon: str,
-    facilities: list[dict],
-    radius_label: str,
-) -> None:
-    """시설 종류별 검색 결과를 동일한 카드 형식으로 표시합니다."""
+@st.dialog("공고 상세정보", width="large")
+def show_listing_detail(listing: dict) -> None:
+    """선택한 청약 공고의 상세정보를 팝업으로 표시합니다."""
 
-    st.subheader(f"{icon} {title}")
+    housing_name = str(
+        listing.get("housing_name") or "주택명 없음"
+    )
+    title = str(
+        listing.get("title") or "공고명 없음"
+    )
 
-    if not facilities:
-        st.info(
-            f"반경 {radius_label} 안에서 "
-            f"{title}을(를) 찾지 못했습니다."
+    st.subheader(housing_name)
+    st.caption(title)
+
+    summary = summary_line(listing)
+    if summary:
+        st.write(summary)
+
+    address = address_line(listing)
+    if address:
+        st.write(address)
+
+    deposit_column, rent_column = st.columns(2)
+
+    with deposit_column:
+        st.caption("보증금")
+        st.markdown(
+            f"**{format_won(listing.get('deposit'))}**"
         )
-        return
 
-    for index, facility in enumerate(facilities, start=1):
-        distance_m = int(facility.get("distance_m") or 0)
-        walking_minutes = int(
-            facility.get("estimated_walking_minutes") or 1
+    with rent_column:
+        st.caption("월 임대료")
+        st.markdown(
+            f"**{format_won(listing.get('monthly_rent'))}**"
         )
 
-        with st.container(border=True):
-            st.markdown(
-                f"#### {index}. "
-                f"{facility.get('name') or '이름 없는 시설'}"
-            )
+    st.caption(period_line(listing))
 
-            facility_address = facility.get("address") or ""
+    description = description_lines(listing)
+    if description:
+        st.divider()
+        st.markdown("#### 상세 내용")
 
-            if facility_address:
-                st.write(facility_address)
+        for line in description:
+            st.markdown(format_description_line(line))
 
-            st.write(
-                f"직선거리 {format_distance(distance_m)} · "
-                f"예상 도보 약 {walking_minutes}분"
-            )
+    source_url = listing.get("source_url")
+    if source_url:
+        st.link_button(
+            "공고 원문 보기",
+            source_url,
+            use_container_width=True,
+        )
 
 
 st.title("생활권 분석")
@@ -216,10 +229,6 @@ if matching_listings:
         "location-search-radius",
         DEFAULT_RADIUS_M,
     )
-    search_radius_label = st.session_state.get(
-        "location-search-radius-label",
-        "2km",
-    )
 
     try:
         with st.spinner("공고 주소와 주변 생활권을 검색하는 중입니다..."):
@@ -253,7 +262,13 @@ if matching_listings:
     )
 
     st.subheader("선택한 공고")
-    st.write(listing_title)
+
+    if st.button(
+        listing_title,
+        key=f"location-listing-detail-{selected_listing.get('id')}",
+    ):
+        show_listing_detail(selected_listing)
+
     st.caption(location.get("address") or listing_address)
 
     st.subheader("주변 생활권 지도")
@@ -276,36 +291,4 @@ if matching_listings:
     st.caption(
         "🏠 공고 위치 · 🚇 지하철역 · "
         "🛒 마트 · 🏥 병원"
-    )
-
-    st.divider()
-
-    render_facility_section(
-        title="가까운 지하철역",
-        icon="🚇",
-        facilities=stations,
-        radius_label=search_radius_label,
-    )
-
-    st.divider()
-
-    render_facility_section(
-        title="가까운 마트",
-        icon="🛒",
-        facilities=marts,
-        radius_label=search_radius_label,
-    )
-
-    st.divider()
-
-    render_facility_section(
-        title="가까운 병원",
-        icon="🏥",
-        facilities=hospitals,
-        radius_label=search_radius_label,
-    )
-
-    st.caption(
-        "※ 도보시간은 직선거리에 보정값을 적용한 예상치입니다. "
-        "실제 경로, 횡단보도 및 출입구 위치에 따라 달라질 수 있습니다."
     )
