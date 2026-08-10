@@ -6,7 +6,7 @@ from clients.listing_client import create_listing, upload_listing_image
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
 from core.constants import SEOUL_DISTRICTS
-from core.create_form import reset_form_state
+from core.create_form import current_nonce, field_key, form_key, reset_form_state
 
 
 # 이미지 크기 제한입니다. 백엔드에서도 같은 값으로 다시 검사합니다.
@@ -18,43 +18,63 @@ if not is_logged_in():
     st.warning("로그인이 필요합니다.")
     st.stop()
 
+# 지금 폼 번호입니다. 초기화를 누르면 번호가 올라가 입력칸이 새로 만들어집니다.
+nonce = current_nonce(st.session_state)
+
+st.caption("등록해도 입력한 내용이 그대로 남습니다. 비슷한 공고를 이어서 넣을 때 편합니다.")
+
 # 비슷한 공고를 이어서 넣는 일이 많아, 등록한 뒤에도 입력값을 지우지 않습니다.
-# 아예 새 공고를 넣을 때는 폼 아래의 "입력 초기화" 버튼을 씁니다.
-with st.form("listing_create_form", clear_on_submit=False):
-    title = st.text_input("공고 제목", key="create-title")
-    housing_name = st.text_input("주택명", key="create-housing-name")
-    area_sqm = st.number_input("면적(㎡)", min_value=0.01, key="create-area-sqm")
+with st.form(form_key(nonce), clear_on_submit=False):
+    title = st.text_input("공고 제목", key=field_key("title", nonce))
+    housing_name = st.text_input("주택명", key=field_key("housing-name", nonce))
+    area_sqm = st.number_input(
+        "면적(㎡)", min_value=0.01, key=field_key("area-sqm", nonce)
+    )
     recruitment_count = st.number_input(
-        "모집 인원", min_value=1, step=1, key="create-recruitment-count"
+        "모집 인원", min_value=1, step=1, key=field_key("recruitment-count", nonce)
     )
     location = st.selectbox(
         "지역(서울 자치구)",
         SEOUL_DISTRICTS,
         index=None,
         placeholder="자치구를 선택해 주세요",
-        key="create-location",
+        key=field_key("location", nonce),
     )
-    deposit = st.number_input("보증금", min_value=0, step=10000, key="create-deposit")
+    deposit = st.number_input(
+        "보증금", min_value=0, step=10000, key=field_key("deposit", nonce)
+    )
     monthly_rent = st.number_input(
-        "월세", min_value=0, step=10000, key="create-monthly-rent"
+        "월세", min_value=0, step=10000, key=field_key("monthly-rent", nonce)
     )
-    application_start_date = st.date_input("신청 시작일", key="create-start-date")
-    application_end_date = st.date_input("신청 종료일", key="create-end-date")
-    description = st.text_area("상세 설명", key="create-description")
+    application_start_date = st.date_input(
+        "신청 시작일", key=field_key("start-date", nonce)
+    )
+    application_end_date = st.date_input(
+        "신청 종료일", key=field_key("end-date", nonce)
+    )
+    description = st.text_area("상세 설명", key=field_key("description", nonce))
     image_file = st.file_uploader(
         "이미지 (선택, 최대 5MB)",
         type=["jpg", "jpeg", "png", "webp"],
-        key="create-image",
+        key=field_key("image", nonce),
     )
     source_url = st.text_input(
-        "원문 URL", placeholder="예: https://apply.lh.or.kr/...", key="create-source-url"
+        "원문 URL",
+        placeholder="예: https://apply.lh.or.kr/...",
+        key=field_key("source-url", nonce),
     )
-    submitted = st.form_submit_button("등록", type="primary")
 
-st.caption("등록해도 입력한 내용이 그대로 남습니다. 비슷한 공고를 이어서 넣을 때 편합니다.")
+    # 두 버튼을 나란히 둡니다. 초기화도 폼 버튼이라야 입력칸을 함께 비울 수 있습니다.
+    submit_column, reset_column = st.columns(2)
 
-# 초기화는 폼 밖에 둡니다. 폼 안에 두면 등록과 함께 눌러야 하기 때문입니다.
-if st.button("입력 초기화", key="create-reset"):
+    with submit_column:
+        submitted = st.form_submit_button("등록", type="primary", use_container_width=True)
+
+    with reset_column:
+        reset_clicked = st.form_submit_button("입력 초기화", use_container_width=True)
+
+if reset_clicked:
+    # 값을 지우고 폼 번호를 올려 입력칸을 새로 만듭니다.
     reset_form_state(st.session_state)
     st.rerun()
 

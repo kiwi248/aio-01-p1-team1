@@ -9,48 +9,97 @@ FE_Admin 폴더에서 아래 명령으로 실행합니다.
 
 import unittest
 
-from core.create_form import CREATE_FORM_KEYS, reset_form_state
+from core.create_form import (
+    CREATE_FORM_FIELDS,
+    NONCE_KEY,
+    current_nonce,
+    field_key,
+    form_key,
+    reset_form_state,
+)
 
 
-def filled_state() -> dict:
+def filled_state(nonce: int = 0) -> dict:
     """등록 폼에 값이 들어 있는 상태를 흉내 냅니다."""
-    return {key: f"{key} 값" for key in CREATE_FORM_KEYS}
+    state = {field_key(field, nonce): f"{field} 값" for field in CREATE_FORM_FIELDS}
+    if nonce:
+        state[NONCE_KEY] = nonce
+    return state
 
 
-class CreateFormKeysTest(unittest.TestCase):
+class FormFieldsTest(unittest.TestCase):
     def test_등록_폼_입력칸이_모두_들어_있다(self):
         expected = {
-            "create-title",
-            "create-housing-name",
-            "create-area-sqm",
-            "create-recruitment-count",
-            "create-location",
-            "create-deposit",
-            "create-monthly-rent",
-            "create-start-date",
-            "create-end-date",
-            "create-description",
-            "create-image",
-            "create-source-url",
+            "title", "housing-name", "area-sqm", "recruitment-count", "location",
+            "deposit", "monthly-rent", "start-date", "end-date", "description",
+            "image", "source-url",
         }
-        self.assertEqual(set(CREATE_FORM_KEYS), expected)
+        self.assertEqual(set(CREATE_FORM_FIELDS), expected)
 
     def test_이름이_겹치지_않는다(self):
-        self.assertEqual(len(CREATE_FORM_KEYS), len(set(CREATE_FORM_KEYS)))
+        self.assertEqual(len(CREATE_FORM_FIELDS), len(set(CREATE_FORM_FIELDS)))
+
+
+class KeyTest(unittest.TestCase):
+    def test_입력칸_이름에_폼_번호가_들어간다(self):
+        self.assertEqual(field_key("title", 0), "create-title-0")
+        self.assertEqual(field_key("title", 3), "create-title-3")
+
+    def test_폼_번호가_다르면_이름도_다르다(self):
+        """이름이 달라져야 브라우저가 새 입력칸으로 보고 값을 비웁니다."""
+        self.assertNotEqual(field_key("title", 0), field_key("title", 1))
+        self.assertNotEqual(form_key(0), form_key(1))
 
     def test_모두_create_로_시작한다(self):
-        """다른 화면의 값과 헷갈리지 않도록 이름 앞을 맞춥니다."""
-        self.assertTrue(all(key.startswith("create-") for key in CREATE_FORM_KEYS))
+        for field in CREATE_FORM_FIELDS:
+            self.assertTrue(field_key(field, 0).startswith("create-"))
+
+
+class CurrentNonceTest(unittest.TestCase):
+    def test_처음에는_0이다(self):
+        self.assertEqual(current_nonce({}), 0)
+
+    def test_저장된_번호를_읽는다(self):
+        self.assertEqual(current_nonce({NONCE_KEY: 5}), 5)
+
+    def test_이상한_값이면_0으로_본다(self):
+        self.assertEqual(current_nonce({NONCE_KEY: "abc"}), 0)
+        self.assertEqual(current_nonce({NONCE_KEY: None}), 0)
 
 
 class ResetFormStateTest(unittest.TestCase):
     def test_입력값을_모두_지운다(self):
         state = filled_state()
 
-        cleared = reset_form_state(state)
+        reset_form_state(state)
 
-        self.assertEqual(state, {})
-        self.assertEqual(set(cleared), set(CREATE_FORM_KEYS))
+        remaining = [k for k in state if k.startswith("create-") and k != NONCE_KEY]
+        self.assertEqual(remaining, [])
+
+    def test_폼_번호를_올린다(self):
+        """번호가 올라가야 브라우저에 남은 입력까지 사라집니다."""
+        state = filled_state()
+
+        new_nonce = reset_form_state(state)
+
+        self.assertEqual(new_nonce, 1)
+        self.assertEqual(state[NONCE_KEY], 1)
+
+    def test_초기화를_반복하면_번호가_계속_올라간다(self):
+        state = filled_state()
+
+        reset_form_state(state)
+        second = reset_form_state(state)
+
+        self.assertEqual(second, 2)
+
+    def test_새_번호의_입력칸은_비어_있다(self):
+        state = filled_state()
+
+        new_nonce = reset_form_state(state)
+
+        for field in CREATE_FORM_FIELDS:
+            self.assertNotIn(field_key(field, new_nonce), state)
 
     def test_등록_폼과_상관없는_값은_지우지_않는다(self):
         """로그인 정보처럼 다른 값까지 지우면 화면이 로그아웃됩니다."""
@@ -59,40 +108,29 @@ class ResetFormStateTest(unittest.TestCase):
 
         reset_form_state(state)
 
-        self.assertEqual(state, {"loginout": "login", "admin_username": "tester"})
+        self.assertEqual(state["loginout"], "login")
+        self.assertEqual(state["admin_username"], "tester")
 
     def test_값이_없어도_오류가_나지_않는다(self):
         state = {}
 
-        cleared = reset_form_state(state)
+        new_nonce = reset_form_state(state)
 
-        self.assertEqual(cleared, [])
-        self.assertEqual(state, {})
+        self.assertEqual(new_nonce, 1)
 
-    def test_일부만_있어도_있는_것만_지운다(self):
-        state = {"create-title": "제목", "loginout": "login"}
-
-        cleared = reset_form_state(state)
-
-        self.assertEqual(cleared, ["create-title"])
-        self.assertEqual(state, {"loginout": "login"})
-
-    def test_두_번_눌러도_안전하다(self):
-        state = filled_state()
+    def test_이전_번호의_값은_남기지_않는다(self):
+        state = filled_state(nonce=2)
 
         reset_form_state(state)
-        cleared_again = reset_form_state(state)
 
-        self.assertEqual(cleared_again, [])
-        self.assertEqual(state, {})
+        self.assertNotIn(field_key("title", 2), state)
 
     def test_초기화하지_않으면_입력값이_남는다(self):
         """등록 뒤에도 값이 남아야 비슷한 공고를 이어서 넣을 수 있습니다."""
         state = filled_state()
 
-        # 초기화를 부르지 않은 경우
-        self.assertEqual(state["create-title"], "create-title 값")
-        self.assertIn("create-image", state)
+        self.assertEqual(state[field_key("title", 0)], "title 값")
+        self.assertIn(field_key("image", 0), state)
 
 
 if __name__ == "__main__":
