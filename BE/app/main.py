@@ -1,10 +1,10 @@
 import os
-from contextlib import asynccontextmanager
+import time
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.log_store import start_simulator_thread
+from app.core.log_store import add_log
 from app.exceptions.handlers import register_exception_handlers
 from app.routers.admin_router import admin_router
 from app.routers.favorite_router import favorite_router
@@ -12,12 +12,14 @@ from app.routers.listing_router import listing_router
 from app.routers.log_router import log_router
 from app.routers.profile_router import profile_router
 
+# 이 경로들은 로그 대시보드 자신이 5초마다 계속 호출하는 경로라, 그대로 로그를 남기면
+# "대시보드를 보는 행위" 자체가 계속 로그로 찍히는 노이즈가 됩니다. 그래서 기록 대상에서 뺍니다.
+EXCLUDED_LOG_PATHS = {"/logs", "/logs/history", "/docs", "/redoc", "/openapi.json"}
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # 서버가 시작될 때 로그 시뮬레이터를 백그라운드 스레드로 한 번만 띄웁니다.
-    start_simulator_thread()
-    yield
+# 이 시간(ms)보다 오래 걸리면 2xx 응답이라도 warning으로 기록합니다.
+# GET /listings/getall 벤치마크 기준 평상시 최대 응답시간이 약 1.7초였던 것을 감안해
+# 여유를 두고 3초로 잡았습니다 (BE/scripts/benchmark_listings.py 참고).
+SLOW_RESPONSE_THRESHOLD_MS = 3000
 
 
 # Swagger 문서(/docs)에 표시할 API 그룹 설명입니다.
@@ -40,14 +42,13 @@ tags_metadata = [
     },
     {
         "name": "Log",
-        "description": "실시간 로그 대시보드용 조회 API (메모리 buffer, DB 미사용)",
+        "description": "실시간 요청 로그 조회 API (메모리 buffer + warning/error는 Supabase에도 저장)",
     },
 ]
 
 app = FastAPI(
     title="공공임대 청약 통합 안내 서비스",
     openapi_tags=tags_metadata,
-    lifespan=lifespan,
 )
 
 # Streamlit Cloud(FE_Admin, FE_User)는 백엔드와 다른 도메인에서 API를 호출하므로
@@ -66,6 +67,54 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """실제로 들어온 요청마다 처리 시간과 결과를 로그로 남깁니다.
+
+    레벨 분류 기준:
+      - 5xx 응답        -> error
+      - 4xx 응답        -> warning
+      - 느린 2xx 응답    -> warning (SLOW_RESPONSE_THRESHOLD_MS 이상)
+      - 그 외 2xx 응답   -> info
+    """
+
+    if request.url.path in EXCLUDED_LOG_PATHS:
+        return await call_next(request)
+
+    screen = f"{request.method} {request.url.path}"
+    start = time.perf_counter()
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        # HTTPException/RequestValidationError는 이미 JSONResponse로 바뀌어 여기까지
+        # 오지 않습니다. 여기 걸리는 건 정말 처리되지 않은 버그성 예외이므로 기록해 둡니다.
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        add_log("error", screen, "처리되지 않은 예외 발생", latency_ms)
+        raise
+
+    latency_ms = int((time.perf_counter() - start) * 1000)
+    status_code = response.status_code
+
+    if status_code >= 500:
+        level = "error"
+        message = f"서버 오류 ({status_code})"
+    elif status_code >= 400:
+        level = "warning"
+        message = f"클라이언트 오류 ({status_code})"
+    elif latency_ms >= SLOW_RESPONSE_THRESHOLD_MS:
+        level = "warning"
+        message = "느린 응답 감지"
+    else:
+        level = "info"
+        message = "정상 처리"
+
+    add_log(level, screen, message, latency_ms)
+
+    return response
+
 
 register_exception_handlers(app)
 
