@@ -25,6 +25,7 @@ home_page = st.Page("app_pages/02_home.py", title="홈", icon="🏠", default=Tr
 login_page = st.Page("app_pages/00_login.py", title="로그인", icon="🔐")
 signup_page = st.Page("app_pages/01_signup.py", title="회원가입", icon="📝")
 listings_page = st.Page("app_pages/03_listings.py", title="청약정보 조회", icon="📋")
+location_page = st.Page("app_pages/06_location.py",title="생활권 분석",icon="🚇")
 mypage_page = st.Page("app_pages/04_mypage.py", title="My Page", icon="⭐")
 favorite_page = st.Page("app_pages/05_favorite.py", title="즐겨찾기", icon="❤️")
 
@@ -33,7 +34,7 @@ favorite_page = st.Page("app_pages/05_favorite.py", title="즐겨찾기", icon="
 # 로그인 상태에 따라 목록을 바꾸면, 새로고침 직후에는 아직 로그인 상태를 모르기 때문에
 # 지금 보고 있던 주소가 목록에서 빠져 "Page not found"가 뜰 수 있습니다.
 # 각 화면이 이미 로그인 여부를 스스로 확인하므로 등록은 항상 합니다.
-pages = [home_page, login_page, signup_page, listings_page, mypage_page, favorite_page]
+pages = [home_page, login_page, signup_page, listings_page,location_page, mypage_page, favorite_page]
 
 # 경로 등록을 먼저 합니다. 아래에서 잠시 멈추더라도 보고 있던 주소가 유지됩니다.
 navigation = st.navigation(pages, position="hidden")
@@ -85,6 +86,7 @@ with st.sidebar:
     st.title("메뉴")
     st.page_link(home_page)
     st.page_link(listings_page)
+    st.page_link(location_page)
 
     if is_logged_in():
         st.page_link(favorite_page)

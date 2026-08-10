@@ -10,6 +10,7 @@ from app.routers.admin_router import admin_router
 from app.routers.favorite_router import favorite_router
 from app.routers.listing_router import listing_router
 from app.routers.log_router import log_router
+from app.routers.location_router import location_router
 from app.routers.profile_router import profile_router
 
 # 이 경로들은 로그 대시보드 자신이 5초마다 계속 호출하는 경로라, 그대로 로그를 남기면
@@ -35,6 +36,18 @@ tags_metadata = [
     {
         "name": "Listing",
         "description": "청약정보 조회 및 조건검색",
+    },
+        {
+        "name": "Listing",
+        "description": "청약정보 조회 및 조건검색",
+    },
+    {
+        "name": "Location",
+        "description": "주소 좌표 변환 및 주변 생활권 시설 조회",
+    },
+    {
+        "name": "Favorite",
+        "description": "mypage 즐겨찾기 등록/조회/삭제",
     },
     {
         "name": "Favorite",
@@ -123,3 +136,4 @@ app.include_router(profile_router)
 app.include_router(listing_router)
 app.include_router(favorite_router)
 app.include_router(log_router)
+app.include_router(location_router)
