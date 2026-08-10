@@ -6,9 +6,19 @@ from clients.favorite_client import create_favorite
 from clients.listing_client import get_listings, search_listings
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
-from core.area_format import format_area
 from core.constants import SEOUL_DISTRICTS
 from core.dday import dday_label, dim_if_closed, is_closed
+from core.listing_view import (
+    address_line,
+    card_title,
+    dday_badge,
+    description_preview,
+    description_lines,
+    format_description_line,
+    format_won,
+    period_line,
+    summary_line,
+)
 from core.pagination import (
     PAGE_SIZE,
     build_params,
@@ -93,53 +103,79 @@ try:
                 return dim_if_closed(text, closed)
 
             with st.container(border=True):
-                st.markdown(f"### {dim(listing.get('title') or '제목 없음')}")
-                if listing.get("image_url"):
-                    st.image(listing["image_url"], width=300)
-                st.markdown(
-                    dim(
-                        f"주택명: {listing.get('housing_name') or '-'}  |  "
-                        f"자치구: {listing.get('location') or '-'}"
-                    )
-                )
-                if listing.get("detail_address"):
-                    st.markdown(dim(f"주소: {listing['detail_address']}"))
-                st.markdown(
-                    dim(
-                        f"면적: {format_area(listing.get('area_sqm'))}  |  "
-                        f"모집 인원: {listing.get('recruitment_count') or '-'}명"
-                    )
-                )
-                st.markdown(
-                    dim(
-                        f"보증금: {int(listing.get('deposit') or 0):,}원  |  "
-                        f"월세: {int(listing.get('monthly_rent') or 0):,}원"
-                    )
-                )
-                st.caption(
-                    f"신청 기간: {listing.get('application_start_date') or '-'} ~ "
-                    f"{end_date or '-'}"
-                )
-                if remaining:
-                    if closed:
-                        st.caption(f"신청 마감 ({remaining})")
-                    else:
-                        st.warning(f"신청 마감까지 {remaining}")
-                if listing.get("description"):
-                    st.markdown(dim(listing["description"]))
+                # 공고명은 주택형마다 같아서 구분이 안 됩니다.
+                # 주택명을 앞세우고 공고명은 작게 둡니다.
+                text_column, image_column = st.columns([3, 1], vertical_alignment="top")
 
-                if listing.get("source_url"):
-                    st.link_button("공고 원문 보기", listing["source_url"])
+                with text_column:
+                    st.markdown(f"#### {dim(card_title(listing))}")
+                    st.caption(listing.get("title") or "")
 
-                if is_logged_in():
-                    if st.button("즐겨찾기 추가", key=f"favorite-add-{listing['id']}"):
-                        result = create_favorite(st.session_state.user_id, listing["id"])
-                        st.session_state.listing_message = result.get(
-                            "message", "즐겨찾기에 등록되었습니다."
+                    summary = summary_line(listing)
+                    if summary:
+                        st.markdown(dim(summary))
+
+                    address = address_line(listing)
+                    if address:
+                        st.markdown(dim(address))
+
+                with image_column:
+                    if listing.get("image_url"):
+                        st.image(listing["image_url"], use_container_width=True)
+
+                # 금액은 가장 먼저 보게 되는 값이라 한 줄에 나란히 크게 둡니다.
+                deposit_column, rent_column = st.columns(2)
+                deposit_column.caption("보증금")
+                deposit_column.markdown(
+                    dim(f"**{format_won(listing.get('deposit'))}**")
+                )
+                rent_column.caption("월세")
+                rent_column.markdown(
+                    dim(f"**{format_won(listing.get('monthly_rent'))}**")
+                )
+
+                # 신청 기간과 남은 날짜를 한 줄에 붙여 둡니다.
+                period_column, dday_column = st.columns([3, 1], vertical_alignment="center")
+                period_column.caption(period_line(listing))
+                badge = dday_badge(remaining, closed)
+                if badge:
+                    dday_column.markdown(badge)
+
+                # 설명이 길어 목록이 늘어지므로 첫 줄만 보여 주고 접어 둡니다.
+                preview = description_preview(listing)
+                if preview:
+                    with st.expander(f"상세 정보  ·  {preview}"):
+                        # 줄바꿈 하나는 마크다운에서 공백이 되어 항목이 한 줄로 붙습니다.
+                        # 줄마다 따로 그려 항목이 구분되게 합니다.
+                        for line in description_lines(listing):
+                            st.markdown(format_description_line(line))
+
+                link_column, favorite_column = st.columns(2)
+
+                with link_column:
+                    if listing.get("source_url"):
+                        st.link_button(
+                            "공고 원문 보기",
+                            listing["source_url"],
+                            use_container_width=True,
                         )
-                        st.rerun()
-                else:
-                    st.caption("로그인하면 즐겨찾기에 담을 수 있습니다.")
+
+                with favorite_column:
+                    if is_logged_in():
+                        if st.button(
+                            "즐겨찾기 추가",
+                            use_container_width=True,
+                            key=f"favorite-add-{listing['id']}",
+                        ):
+                            result = create_favorite(
+                                st.session_state.user_id, listing["id"]
+                            )
+                            st.session_state.listing_message = result.get(
+                                "message", "즐겨찾기에 등록되었습니다."
+                            )
+                            st.rerun()
+                    else:
+                        st.caption("로그인하면 즐겨찾기에 담을 수 있습니다.")
 
         # 검색 결과일 때는 페이지 이동 버튼을 두지 않습니다.
         if last_page is not None:
