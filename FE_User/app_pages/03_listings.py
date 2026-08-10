@@ -19,6 +19,7 @@ from core.listing_view import (
     period_line,
     summary_line,
 )
+from core.image_gallery import count_label, image_list, rows_of
 from core.listing_sort import (
     DEFAULT_LABEL,
     default_index,
@@ -162,9 +163,23 @@ try:
                     dday_column.markdown(badge)
 
                 # 설명이 길어 목록이 늘어지므로 첫 줄만 보여 주고 접어 둡니다.
+                # 사진도 여기 안에 둡니다. 카드마다 사진을 여러 장 펼쳐 놓으면
+                # 목록이 사진으로 뒤덮여 오히려 훑기 어려워집니다.
                 preview = description_preview(listing)
-                if preview:
-                    with st.expander(f"상세 정보  ·  {preview}"):
+                images = image_list(listing)
+                summary = preview or count_label(images)
+
+                if summary:
+                    with st.expander(f"상세 정보  ·  {summary}"):
+                        if images:
+                            st.caption(count_label(images))
+                            # 스무 장까지 올 수 있어 한 줄에 넷씩 끊어 놓습니다.
+                            for row in rows_of(images):
+                                columns = st.columns(len(row))
+                                for column, url in zip(columns, row):
+                                    column.image(url, use_container_width=True)
+                            st.divider()
+
                         # 줄바꿈 하나는 마크다운에서 공백이 되어 항목이 한 줄로 붙습니다.
                         # 줄마다 따로 그려 항목이 구분되게 합니다.
                         for line in description_lines(listing):

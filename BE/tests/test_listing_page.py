@@ -153,7 +153,11 @@ class ListingPageServiceTest(unittest.TestCase):
         # 3페이지는 21번째부터 30번째까지 (0부터 세면 20~29)
         self.assertEqual(log["range"], [(20, 29)])
         # 개수 조회 -> 목록 조회 순서로 두 번 호출합니다.
-        self.assertEqual(log["select"], [("id", "exact"), ("*", None)])
+        # 사진은 listing_images 테이블에 따로 있어 함께 읽어 옵니다.
+        self.assertEqual(
+            log["select"],
+            [("id", "exact"), ("*, listing_images(image_url, sort_order)", None)],
+        )
 
     def test_0건이어도_정상_응답한다(self):
         result, _ = run_page([])

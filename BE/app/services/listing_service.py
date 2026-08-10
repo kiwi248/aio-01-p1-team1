@@ -44,12 +44,93 @@ def is_known_sort(sort: str | None) -> bool:
     return sort in SORT_COLUMNS
 
 
+# 사진은 listing_images 테이블에 따로 있어 조회할 때 함께 읽어 옵니다.
+# favorite_service의 "*, listing:listings(*)"와 같은 방식입니다.
+LISTING_SELECT = "*, listing_images(image_url, sort_order)"
+
+
+def to_listing(row: dict) -> ListingPublic:
+    """DB에서 읽은 한 줄을 화면용 값으로 바꿉니다.
+
+    함께 읽어 온 사진을 sort_order 순으로 늘어놓아 images에 담습니다.
+
+    사진 테이블이 비어 있고 대표 이미지만 있는 공고가 있습니다.
+    새 테이블을 만들기 전에 등록된 공고들입니다.
+    그런 공고는 대표 이미지 한 장을 목록으로 만들어, 상세보기에서
+    사진이 아예 없는 것처럼 보이지 않게 합니다.
+    """
+
+    # 원본을 건드리지 않도록 복사해서 씁니다.
+    data = dict(row)
+    rows = data.pop("listing_images", None) or []
+
+    rows.sort(key=lambda item: item.get("sort_order") or 0)
+    images = [item["image_url"] for item in rows if item.get("image_url")]
+
+    if not images and data.get("image_url"):
+        images = [data["image_url"]]
+
+    data["images"] = images
+    return ListingPublic.model_validate(data)
+
+
+def listing_images_get(listing_id: int) -> list[str]:
+    """공고에 붙은 사진 URL을 순서대로 돌려줍니다."""
+
+    result = (
+        get_supabase()
+        .table("listing_images")
+        .select("image_url, sort_order")
+        .eq("listing_id", listing_id)
+        .order("sort_order")
+        .execute()
+    )
+    return [row["image_url"] for row in result.data if row.get("image_url")]
+
+
+def listing_images_replace(listing_id: int, image_urls: list[str]) -> None:
+    """공고의 사진 목록을 통째로 새로 씁니다.
+
+    기존 행을 지우고 받은 순서대로 다시 넣습니다.
+    sort_order 0이 대표 이미지이며 listings.image_url과 같은 값입니다.
+
+    Storage 파일은 여기서 지우지 않습니다. 어떤 파일을 지워도 되는지는
+    다른 공고가 쓰고 있는지 확인한 뒤에 정해야 하기 때문입니다.
+    """
+
+    supabase = get_supabase()
+    supabase.table("listing_images").delete().eq("listing_id", listing_id).execute()
+
+    if not image_urls:
+        return
+
+    supabase.table("listing_images").insert(
+        [
+            {"listing_id": listing_id, "image_url": url, "sort_order": order}
+            for order, url in enumerate(image_urls)
+        ]
+    ).execute()
+
+
+def split_image_urls(listing: ListingCreate) -> tuple[dict, list[str]]:
+    """저장할 값에서 사진 목록을 떼어 냅니다.
+
+    image_urls는 listings 테이블에 없는 칸입니다. 그대로 보내면
+    "그런 컬럼이 없다"며 저장이 실패하므로 따로 빼서 돌려줍니다.
+
+    mode="json"으로 바꾸면 date는 "2026-08-07", Decimal은 "39.72" 같은
+    문자열이 되어 Supabase가 그대로 받을 수 있습니다.
+    """
+
+    listing_data = listing.model_dump(mode="json")
+    image_urls = listing_data.pop("image_urls", None) or []
+    return listing_data, image_urls
+
+
 def listing_create(listing: ListingCreate) -> ListingPublic | None:
     supabase = get_supabase()
 
-    # mode="json"으로 바꾸면 date는 "2026-08-07", Decimal은 "39.72" 같은
-    # 문자열이 되어 Supabase가 그대로 받을 수 있습니다.
-    listing_data = listing.model_dump(mode="json")
+    listing_data, image_urls = split_image_urls(listing)
 
     result = (
         supabase.table("listings")
@@ -58,14 +139,20 @@ def listing_create(listing: ListingCreate) -> ListingPublic | None:
     )
     if not result.data:
         return None
-    return ListingPublic.model_validate(result.data[0])
+
+    created = result.data[0]
+    # 공고가 만들어진 뒤에야 id를 알 수 있어, 사진은 그다음에 넣습니다.
+    listing_images_replace(created["id"], image_urls)
+    created["listing_images"] = [
+        {"image_url": url, "sort_order": order} for order, url in enumerate(image_urls)
+    ]
+    return to_listing(created)
 
 
 def listing_update(listing_id: int, listing: ListingCreate) -> ListingPublic | None:
     supabase = get_supabase()
 
-    # 등록과 같은 방식으로 date와 Decimal을 Supabase가 받을 수 있는 값으로 바꿉니다.
-    listing_data = listing.model_dump(mode="json")
+    listing_data, image_urls = split_image_urls(listing)
 
     result = (
         supabase.table("listings")
@@ -75,7 +162,13 @@ def listing_update(listing_id: int, listing: ListingCreate) -> ListingPublic | N
     )
     if not result.data:
         return None
-    return ListingPublic.model_validate(result.data[0])
+
+    updated = result.data[0]
+    listing_images_replace(listing_id, image_urls)
+    updated["listing_images"] = [
+        {"image_url": url, "sort_order": order} for order, url in enumerate(image_urls)
+    ]
+    return to_listing(updated)
 
 
 def listing_clear_image(listing_id: int) -> ListingPublic | None:
@@ -141,7 +234,7 @@ def listing_get_all(sort: str | None = None) -> list[ListingPublic]:
     이미 신청이 끝난 공고는 어떤 기준으로 정렬하든 맨 뒤로 보냅니다.
     """
     supabase = get_supabase()
-    query = supabase.table("listings").select("*")
+    query = supabase.table("listings").select(LISTING_SELECT)
 
     # 마감일 순은 등록 시각까지 함께 보므로 따로 둡니다.
     if sort is None or sort == "end_date_asc":
@@ -157,7 +250,7 @@ def listing_get_all(sort: str | None = None) -> list[ListingPublic]:
         # 고른 기준의 순서를 흐트러뜨리지 않도록 끝난 공고도 그대로 둡니다.
         recent_closed_first = False
 
-    listings = [ListingPublic.model_validate(item) for item in result.data]
+    listings = [to_listing(item) for item in result.data]
     return move_closed_to_end(listings, recent_closed_first=recent_closed_first)
 
 
@@ -204,7 +297,7 @@ def listing_get_page(
 
     # 등록 시각이 같은 공고가 있어도 순서가 흔들리지 않도록 id로 한 번 더 정렬합니다.
     start = (page - 1) * page_size
-    query = supabase.table("listings").select("*")
+    query = supabase.table("listings").select(LISTING_SELECT)
     result = (
         apply_sort(query, sort or "created_desc")
         .range(start, start + page_size - 1)
@@ -212,7 +305,7 @@ def listing_get_page(
     )
 
     return ListingPage(
-        items=[ListingPublic.model_validate(item) for item in result.data],
+        items=[to_listing(item) for item in result.data],
         page=page,
         page_size=page_size,
         total_count=total_count,
@@ -224,13 +317,13 @@ def listing_get(listing_id: int) -> ListingPublic | None:
     supabase = get_supabase()
     result = (
         supabase.table("listings")
-        .select("*")
+        .select(LISTING_SELECT)
         .eq("id", listing_id)
         .execute()
     )
     if not result.data:
         return None
-    return ListingPublic.model_validate(result.data[0])
+    return to_listing(result.data[0])
 
 
 def listing_search(
@@ -240,7 +333,7 @@ def listing_search(
     sort: str | None = None,
 ) -> list[ListingPublic]:
     supabase = get_supabase()
-    query = supabase.table("listings").select("*")
+    query = supabase.table("listings").select(LISTING_SELECT)
 
     if location:
         query = query.ilike("location", f"%{location}%")
@@ -262,7 +355,7 @@ def listing_search(
         result = apply_sort(query, sort).execute()
         recent_closed_first = False
 
-    listings = [ListingPublic.model_validate(item) for item in result.data]
+    listings = [to_listing(item) for item in result.data]
     return move_closed_to_end(listings, recent_closed_first=recent_closed_first)
 
 
