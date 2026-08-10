@@ -97,24 +97,26 @@ def favorite_get_coordinates(user_id: str) -> list[FavoriteCoordinate]:
         return []
 
     rest_api_key = get_kakao_rest_api_key()
-    coordinate_by_location: dict[str, tuple[float, float] | None] = {}
+    coordinate_by_detail_address: dict[str, tuple[float, float] | None] = {}
     results: list[FavoriteCoordinate] = []
 
     for favorite in favorites:
-        location = favorite.listing.location.strip()
-        if location not in coordinate_by_location:
-            coordinate_by_location[location] = address_to_coordinates(
-                location,
+        detail_address = (favorite.listing.detail_address or favorite.listing.location or "").strip()
+        if not detail_address:
+            continue
+        if detail_address not in coordinate_by_detail_address:
+            coordinate_by_detail_address[detail_address] = address_to_coordinates(
+                detail_address,
                 rest_api_key,
             )
 
-        coordinates = coordinate_by_location[location]
+        coordinates = coordinate_by_detail_address[detail_address]
         longitude, latitude = coordinates if coordinates is not None else (None, None)
         results.append(
             FavoriteCoordinate(
                 listing_id=favorite.listing_id,
                 title=favorite.listing.title,
-                location=location,
+                location=detail_address,
                 longitude=longitude,
                 latitude=latitude,
             )
