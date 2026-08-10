@@ -4,3 +4,4 @@ pandas>=1.4,<3
 supabase==2.31.0
 python-dotenv==1.2.2
 streamlit-browser-session-storage==0.0.12
+pydeck>=0.9,<1
