@@ -7,16 +7,23 @@ from streamlit.components.v1 import html as components_html
 
 from clients.listing_client import (
     delete_listing,
-    delete_listing_image,
     get_listing,
     get_listings_page,
+    replace_listing_images,
     search_listings,
     update_listing,
 )
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
 from core.constants import SEOUL_DISTRICTS
-from core.image_delete import should_show_delete_button, summarize_result
+from core.image_delete import summarize_result
+from core.image_gallery import (
+    MAX_IMAGE_COUNT,
+    check_upload,
+    count_label,
+    image_list,
+    rows_of,
+)
 from core.listing_view import (
     address_line,
     card_title,
@@ -129,44 +136,109 @@ def close_edit() -> None:
     st.rerun()
 
 
-@st.dialog("이미지 삭제 확인")
-def confirm_image_delete(listing_id: int) -> None:
-    """이미지를 지우기 전에 한 번 더 묻는 경고창입니다.
+@st.dialog("사진 삭제 확인")
+def confirm_one_image_delete(listing_id: int, images: list[str], target: str) -> None:
+    """사진 한 장을 지우기 전에 한 번 더 묻는 경고창입니다.
 
-    여기서 삭제를 고르기 전까지는 서버에 아무것도 보내지 않습니다.
+    남길 사진 목록을 서버에 보내는 방식이라, 여기서 삭제를 고르기 전까지는
+    아무것도 보내지 않습니다.
     """
 
-    st.write("현재 등록된 이미지를 삭제하시겠습니까?")
-    st.warning("삭제된 이미지는 복구할 수 없습니다.")
-    st.caption("공고의 다른 수정 내용은 저장되지 않으며 현재 이미지만 삭제됩니다.")
+    st.image(target, width=240)
+    st.write("이 사진을 삭제하시겠습니까?")
+    st.warning("삭제된 사진은 복구할 수 없습니다.")
+    st.caption("공고의 다른 수정 내용은 저장되지 않으며 이 사진만 삭제됩니다.")
 
     cancel_column, delete_column = st.columns(2)
 
     with cancel_column:
-        if st.button("취소", use_container_width=True, key="image-delete-cancel"):
-            # 아무것도 보내지 않고 경고창만 닫습니다.
+        if st.button("취소", use_container_width=True, key="one-image-cancel"):
             st.rerun()
 
     with delete_column:
         if st.button(
-            "삭제", type="primary", use_container_width=True, key="image-delete-confirm"
+            "삭제", type="primary", use_container_width=True, key="one-image-confirm"
         ):
-            # 공고 id만 보냅니다. 수정 폼에 입력해 둔 값은 함께 가지 않습니다.
+            kept = [url for url in images if url != target]
             try:
-                response = delete_listing_image(listing_id)
+                response = replace_listing_images(listing_id, kept, [])
             except BackendAPIError as error:
                 st.error(str(error))
                 return
 
             succeeded, message = summarize_result(response)
             if not succeeded:
-                # 경고창을 닫지 않고 원인을 보여 줍니다.
                 st.error(message)
                 return
 
-            # 다시 그리면 공고를 새로 읽어 와 이미지 없음 상태가 됩니다.
             st.session_state.image_delete_message = message
             st.rerun()
+
+
+def show_listing_images(listing_id: int, listing: dict) -> None:
+    """공고 사진을 보여 주고 더하거나 지웁니다.
+
+    아래 수정 폼과 따로 둡니다. 사진을 정리할 때 폼에 입력만 해 두고
+    아직 저장하지 않은 제목·금액 같은 값이 함께 저장되지 않게 하려는 것입니다.
+    """
+
+    images = image_list(listing)
+
+    st.caption(f"현재 사진  ·  {count_label(images) or '없음'}")
+
+    if images:
+        for row in rows_of(images):
+            columns = st.columns(len(row))
+            for column, url in zip(columns, row):
+                column.image(url, use_container_width=True)
+                # 맨 앞 사진이 목록 카드에 보이는 대표 이미지입니다.
+                if url == images[0]:
+                    column.caption("대표 이미지")
+                if column.button(
+                    "삭제",
+                    use_container_width=True,
+                    key=f"image-remove-{listing_id}-{images.index(url)}",
+                ):
+                    confirm_one_image_delete(listing_id, images, url)
+    else:
+        st.caption("등록된 사진이 없습니다.")
+
+    remaining = MAX_IMAGE_COUNT - len(images)
+    if remaining <= 0:
+        st.info(f"사진은 최대 {MAX_IMAGE_COUNT}장까지입니다. 더 넣으려면 먼저 지워 주세요.")
+        return
+
+    new_files = st.file_uploader(
+        f"사진 추가 (최대 {remaining}장 더)",
+        type=["jpg", "jpeg", "png", "webp"],
+        accept_multiple_files=True,
+        key=f"edit-image-add-{listing_id}",
+    )
+    new_files = new_files or []
+
+    problem = check_upload(new_files, already=len(images))
+    if problem:
+        st.error(problem)
+
+    if st.button(
+        "사진 저장",
+        disabled=not new_files or bool(problem),
+        key=f"image-add-save-{listing_id}",
+    ):
+        try:
+            with st.spinner(f"사진 {len(new_files)}장을 업로드하는 중..."):
+                response = replace_listing_images(listing_id, images, new_files)
+        except BackendAPIError as error:
+            st.error(str(error))
+            return
+
+        succeeded, message = summarize_result(response)
+        if not succeeded:
+            st.error(message)
+            return
+
+        st.session_state.image_delete_message = message
+        st.rerun()
 
 
 def show_listing_list() -> None:
@@ -300,9 +372,23 @@ def show_listing_list() -> None:
             st.caption(period_line(listing))
 
             # 설명이 길어 목록이 늘어지므로 첫 줄만 보여 주고 접어 둡니다.
+            # 사진도 여기 안에 둡니다. 카드마다 사진을 여러 장 펼쳐 놓으면
+            # 목록이 사진으로 뒤덮여 오히려 훑기 어려워집니다.
             preview = description_preview(listing)
-            if preview:
-                with st.expander(f"상세 정보  ·  {preview}"):
+            images = image_list(listing)
+            summary = preview or count_label(images)
+
+            if summary:
+                with st.expander(f"상세 정보  ·  {summary}"):
+                    if images:
+                        st.caption(count_label(images))
+                        # 스무 장까지 올 수 있어 한 줄에 넷씩 끊어 놓습니다.
+                        for row in rows_of(images):
+                            columns = st.columns(len(row))
+                            for column, url in zip(columns, row):
+                                column.image(url, use_container_width=True)
+                        st.divider()
+
                     # 줄바꿈 하나는 마크다운에서 공백이 되어 항목이 한 줄로 붙습니다.
                     # 줄마다 따로 그려 항목이 구분되게 합니다.
                     for line in description_lines(listing):
@@ -431,15 +517,12 @@ def show_listing_edit(listing_id: int) -> None:
     if message := st.session_state.pop("image_delete_message", None):
         st.success(message)
 
-    if should_show_delete_button(listing.get("image_url")):
-        st.caption("현재 이미지")
-        st.image(listing["image_url"], width=300)
+    # 사진은 아래 수정 폼과 따로 다룹니다.
+    # 사진을 만져도 폼에 입력해 둔 값은 그대로 남고,
+    # 폼을 저장해도 사진은 건드리지 않습니다.
+    show_listing_images(listing_id, listing)
 
-        # 누르면 경고창만 뜹니다. 이 버튼만으로는 아무것도 지워지지 않습니다.
-        if st.button("현재 이미지 삭제", key=f"image-delete-open-{listing_id}"):
-            confirm_image_delete(listing_id)
-    else:
-        st.caption("등록된 이미지가 없습니다.")
+    st.divider()
 
     with st.form("listing_edit_form"):
         title = st.text_input("공고 제목", value=listing.get("title") or "", key=f"edit-title-{listing_id}")
