@@ -1,10 +1,12 @@
 # test_listing_sort.py
-"""청약정보 정렬 기준 이름 테스트.
+"""관리자 청약정보 정렬 기준 이름 테스트.
 
 실제 정렬은 백엔드가 하므로, 여기서는 화면 이름과 보낼 값이
 제대로 짝지어져 있는지만 확인합니다.
 
-FE_User 폴더에서 아래 명령으로 실행합니다.
+사용자 화면과 같은 함수를 쓰지만 앱마다 모듈이 따로 있어 각자 확인합니다.
+
+FE_Admin 폴더에서 아래 명령으로 실행합니다.
 
     python -m unittest discover -s tests
 """
@@ -54,9 +56,9 @@ class SortOptionsTest(unittest.TestCase):
 
 
 class DefaultTest(unittest.TestCase):
-    def test_사용자_화면의_기본은_마감이_가까운_순이다(self):
-        """지금까지 보여 주던 순서를 그대로 유지합니다."""
-        self.assertEqual(DEFAULT_LABEL, "신청 종료일 빠른순")
+    def test_관리자_화면의_기본은_등록_최신순이다(self):
+        """방금 등록한 공고를 먼저 확인하는 일이 많아 지금 순서를 유지합니다."""
+        self.assertEqual(DEFAULT_LABEL, "등록 최신순")
 
     def test_기본값의_자리를_알려_준다(self):
         self.assertEqual(sort_labels()[default_index()], DEFAULT_LABEL)

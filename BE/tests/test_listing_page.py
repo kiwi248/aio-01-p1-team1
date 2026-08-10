@@ -66,7 +66,8 @@ class FakeQuery:
         self.log.setdefault("select", []).append((columns, count))
         return self
 
-    def order(self, column, desc=False):
+    def order(self, column, desc=False, nullsfirst=None):
+        # nullsfirst는 값이 비어 있는 공고를 어디에 둘지 정합니다.
         self.log.setdefault("order", []).append((column, desc))
         return self
 
@@ -223,7 +224,7 @@ class ListingPageApiTest(unittest.TestCase):
             response = client.get("/listings/page")
 
         self.assertEqual(response.status_code, 200)
-        fake.assert_called_once_with(page=1, page_size=10)
+        fake.assert_called_once_with(page=1, page_size=10, sort=None)
         body = response.json()["data"]
         self.assertEqual(body["page"], 1)
         self.assertEqual(body["page_size"], 10)
@@ -236,7 +237,7 @@ class ListingPageApiTest(unittest.TestCase):
             response = client.get("/listings/page", params={"page": 3, "page_size": 20})
 
         self.assertEqual(response.status_code, 200)
-        fake.assert_called_once_with(page=3, page_size=20)
+        fake.assert_called_once_with(page=3, page_size=20, sort=None)
 
     def test_잘못된_페이지_번호는_422로_막는다(self):
         response = client.get("/listings/page", params={"page": 0})

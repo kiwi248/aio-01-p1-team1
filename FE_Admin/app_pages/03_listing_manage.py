@@ -27,6 +27,12 @@ from core.listing_view import (
     period_line,
     summary_line,
 )
+from core.listing_sort import (
+    DEFAULT_LABEL,
+    default_index,
+    sort_key,
+    sort_labels,
+)
 from core.page_params import (
     SEARCH_KEYS,
     build_params,
@@ -41,6 +47,9 @@ MAX_IMAGE_SIZE = 5 * 1024 * 1024
 
 # 한 페이지에 보여줄 공고 수입니다.
 PAGE_SIZE = 10
+
+# 고른 정렬 기준을 담아 둘 자리입니다.
+SORT_STATE_KEY = "admin-listing-sort"
 
 st.title("청약정보 조회 / 삭제")
 
@@ -186,7 +195,19 @@ def show_listing_list() -> None:
                 step=10000,
                 value=int(current_search.get("max_monthly_rent", 0)),
             )
+            st.selectbox(
+                "정렬 기준",
+                sort_labels(),
+                index=default_index(),
+                key=SORT_STATE_KEY,
+                help="검색을 누르면 고른 순서로 다시 정렬합니다.",
+            )
             search_submitted = st.form_submit_button("검색")
+
+    # 고른 정렬 기준은 st.session_state에 남습니다.
+    # 페이지를 넘기거나 수정 화면에 다녀와도 순서가 유지됩니다.
+    current_sort_label = st.session_state.get(SORT_STATE_KEY, DEFAULT_LABEL)
+    current_sort = sort_key(current_sort_label)
 
     if search_submitted:
         # 검색 조건을 주소창에 적어 두고 다시 그립니다.
@@ -210,6 +231,7 @@ def show_listing_list() -> None:
         for name in ("max_deposit", "max_monthly_rent"):
             if name in current_search:
                 params[name] = int(current_search[name])
+        params["sort"] = current_sort
         with st.spinner("검색 중..."):
             response = search_listings(params)
 
@@ -217,11 +239,11 @@ def show_listing_list() -> None:
         if not listings:
             st.info("조회된 청약정보가 없습니다.")
             return
-        st.caption(f"검색 결과 {len(listings)}건")
+        st.caption(f"검색 결과 {len(listings)}건 ({current_sort_label})")
         page = total_pages = total_count = None
     else:
         with st.spinner("불러오는 중..."):
-            response = get_listings_page(current_page, PAGE_SIZE)
+            response = get_listings_page(current_page, PAGE_SIZE, current_sort)
 
         page_data = response.get("data") or {}
         listings = page_data.get("items") or []
@@ -242,7 +264,9 @@ def show_listing_list() -> None:
             st.info("조회된 청약정보가 없습니다.")
             return
 
-        st.caption(f"총 {total_count}건  |  {page} / {total_pages} 페이지")
+        st.caption(
+            f"총 {total_count}건  |  {page} / {total_pages} 페이지 ({current_sort_label})"
+        )
 
     for listing in listings:
         with st.container(border=True):

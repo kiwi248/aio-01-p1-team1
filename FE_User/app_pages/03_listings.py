@@ -19,6 +19,12 @@ from core.listing_view import (
     period_line,
     summary_line,
 )
+from core.listing_sort import (
+    DEFAULT_LABEL,
+    default_index,
+    sort_key,
+    sort_labels,
+)
 from core.pagination import (
     PAGE_SIZE,
     build_params,
@@ -46,16 +52,30 @@ def go_to_page(page: int) -> None:
         st.query_params.from_dict(target)
     st.rerun()
 
+SORT_STATE_KEY = "user-listing-sort"
+
 with st.expander("조건검색"):
     with st.form("listing_search_form"):
         search_location = st.selectbox("서울 자치구", ("전체",) + SEOUL_DISTRICTS)
         search_max_deposit = st.number_input("최대 보증금", min_value=0, step=10000, value=0)
         search_max_monthly_rent = st.number_input("최대 월세", min_value=0, step=10000, value=0)
+        st.selectbox(
+            "정렬 기준",
+            sort_labels(),
+            index=default_index(),
+            key=SORT_STATE_KEY,
+            help="검색을 누르면 고른 순서로 다시 정렬합니다.",
+        )
         search_submitted = st.form_submit_button("검색")
+
+# 고른 정렬 기준은 st.session_state에 남습니다.
+# 페이지를 넘기거나 즐겨찾기를 눌러 화면이 다시 그려져도 순서가 유지됩니다.
+current_sort_label = st.session_state.get(SORT_STATE_KEY, DEFAULT_LABEL)
+current_sort = sort_key(current_sort_label)
 
 try:
     if search_submitted:
-        params = {}
+        params = {"sort": current_sort}
         if search_location != "전체":
             params["location"] = search_location
         if int(search_max_deposit) > 0:
@@ -66,7 +86,7 @@ try:
             response = search_listings(params)
     else:
         with st.spinner("불러오는 중..."):
-            response = get_listings()
+            response = get_listings(current_sort)
 
     listings = response.get("data") or []
 
@@ -79,7 +99,7 @@ try:
             # 검색 결과는 관리자 화면과 같이 한 번에 모두 보여 줍니다.
             page = last_page = None
             page_items = listings
-            st.caption(f"검색 결과 {total_count}건 (마감이 가까운 순)")
+            st.caption(f"검색 결과 {total_count}건 ({current_sort_label})")
         else:
             last_page = total_pages(total_count, PAGE_SIZE)
             page = clamp_page(current_page, total_count, PAGE_SIZE)
@@ -90,7 +110,7 @@ try:
                 go_to_page(page)
 
             st.caption(
-                f"총 {total_count}건  |  {page} / {last_page} 페이지 (마감이 가까운 순)"
+                f"총 {total_count}건  |  {page} / {last_page} 페이지 ({current_sort_label})"
             )
 
         for listing in page_items:

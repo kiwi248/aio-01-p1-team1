@@ -22,9 +22,14 @@ def get_listings():
     return request("GET", "/listings/getall")
 
 
-def get_listings_page(page: int, page_size: int = 10):
+def get_listings_page(page: int, page_size: int = 10, sort: str | None = None):
     # 전체를 받아 오지 않고 필요한 페이지만 가져옵니다.
-    return request("GET", "/listings/page", params={"page": page, "page_size": page_size})
+    # 정렬도 백엔드에 맡깁니다. 받은 10건만 다시 늘어놓으면
+    # 전체 기준의 순서가 아니라 그 페이지 안에서만 뒤바뀌기 때문입니다.
+    params = {"page": page, "page_size": page_size}
+    if sort:
+        params["sort"] = sort
+    return request("GET", "/listings/page", params=params)
 
 
 def get_listing(listing_id: int):
