@@ -31,10 +31,14 @@ class FormFieldsTest(unittest.TestCase):
     def test_등록_폼_입력칸이_모두_들어_있다(self):
         expected = {
             "title", "housing-name", "area-sqm", "recruitment-count", "location",
-            "deposit", "monthly-rent", "start-date", "end-date", "description",
-            "image", "source-url",
+            "detail-address", "deposit", "monthly-rent", "start-date", "end-date",
+            "description", "image", "source-url",
         }
         self.assertEqual(set(CREATE_FORM_FIELDS), expected)
+
+    def test_상세주소_입력칸도_초기화_대상이다(self):
+        """상세주소가 남아 있으면 다른 공고를 넣을 때 헷갈립니다."""
+        self.assertIn("detail-address", CREATE_FORM_FIELDS)
 
     def test_이름이_겹치지_않는다(self):
         self.assertEqual(len(CREATE_FORM_FIELDS), len(set(CREATE_FORM_FIELDS)))

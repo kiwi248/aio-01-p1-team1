@@ -19,6 +19,7 @@ CREATE_FORM_FIELDS = (
     "area-sqm",
     "recruitment-count",
     "location",
+    "detail-address",
     "deposit",
     "monthly-rent",
     "start-date",

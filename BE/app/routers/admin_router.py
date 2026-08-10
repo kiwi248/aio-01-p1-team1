@@ -78,12 +78,16 @@ async def update_listing(
     application_end_date: Annotated[date, Form()],
     description: Annotated[str, Form(min_length=1)],
     source_url: Annotated[str, Form(min_length=1)],
+    detail_address: Annotated[str | None, Form(max_length=255)] = None,
     image: Annotated[UploadFile | None, File()] = None,
     remove_image: Annotated[bool, Form()] = False,
 ) -> ApiResponse:
     current_listing = listing_get(listing_id)
     if current_listing is None:
         raise HTTPException(status_code=404, detail="청약정보를 찾을 수 없습니다.")
+
+    # 상세주소를 비워서 보내면 빈 문자열 대신 값 없음으로 저장합니다.
+    detail_address = (detail_address or "").strip() or None
 
     has_new_image = image is not None and bool(image.filename)
 
@@ -110,6 +114,7 @@ async def update_listing(
         area_sqm=area_sqm,
         recruitment_count=recruitment_count,
         location=location,
+        detail_address=detail_address,
         deposit=deposit,
         monthly_rent=monthly_rent,
         application_start_date=application_start_date,
