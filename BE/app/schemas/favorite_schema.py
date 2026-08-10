@@ -26,6 +26,16 @@ class FavoriteWithListing(BaseModel):
     listing: ListingPublic
 
 
+class FavoriteCoordinate(BaseModel):
+    """즐겨찾기 공고의 주소를 지도 좌표로 변환한 결과입니다."""
+
+    listing_id: int
+    title: str
+    location: str
+    longitude: float | None = None
+    latitude: float | None = None
+
+
 class FavoriteRanking(BaseModel):
     listing_id: int
     title: str

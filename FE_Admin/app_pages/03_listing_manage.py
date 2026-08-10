@@ -17,6 +17,16 @@ from core.api_client import BackendAPIError
 from core.auth import is_logged_in
 from core.constants import SEOUL_DISTRICTS
 from core.image_delete import should_show_delete_button, summarize_result
+from core.listing_view import (
+    address_line,
+    card_title,
+    description_preview,
+    description_lines,
+    format_description_line,
+    format_won,
+    period_line,
+    summary_line,
+)
 from core.page_params import (
     SEARCH_KEYS,
     build_params,
@@ -236,50 +246,81 @@ def show_listing_list() -> None:
 
     for listing in listings:
         with st.container(border=True):
-            st.subheader(listing.get("title") or "제목 없음")
-            if listing.get("image_url"):
-                st.image(listing["image_url"], width=300)
-            st.write(
-                f"주택명: {listing.get('housing_name') or '-'}  |  "
-                f"자치구: {listing.get('location') or '-'}"
-            )
-            st.write(
-                f"면적: {listing.get('area_sqm') or '-'}㎡  |  "
-                f"모집 인원: {listing.get('recruitment_count') or '-'}명"
-            )
-            st.write(
-                f"보증금: {int(listing.get('deposit') or 0):,}원  |  "
-                f"월세: {int(listing.get('monthly_rent') or 0):,}원"
-            )
-            st.caption(
-                f"신청 시작일: {listing.get('application_start_date') or '-'}  |  "
-                f"신청 종료일: {listing.get('application_end_date') or '-'}"
-            )
-            if listing.get("description"):
-                st.write(listing["description"])
+            # 같은 공고 안에 주택형이 여러 개라 공고명이 전부 같습니다.
+            # 주택명을 앞세우고 공고명은 작게 둡니다.
+            text_column, image_column = st.columns([3, 1], vertical_alignment="top")
 
-            if listing.get("source_url"):
-                st.link_button("공고 원문 보기", listing["source_url"])
+            with text_column:
+                st.markdown(f"#### {card_title(listing)}")
+                st.caption(f"#{listing['id']}  ·  {listing.get('title') or ''}")
 
-            # 수정 버튼을 누르면 이 공고 하나만 수정 화면으로 보여줍니다.
-            if st.button("수정", key=f"edit-listing-{listing['id']}"):
-                open_edit(listing["id"])
+                summary = summary_line(listing)
+                if summary:
+                    st.write(summary)
 
-            delete_confirmed = st.checkbox(
-                "삭제한 청약정보는 복구할 수 없습니다. 삭제에 동의합니다.",
-                key=f"delete-confirm-{listing['id']}",
-            )
-            if st.button(
-                "삭제",
-                type="primary",
-                disabled=not delete_confirmed,
-                key=f"delete-listing-{listing['id']}",
-            ):
-                result = delete_listing(listing["id"])
-                st.session_state.listing_message = result.get(
-                    "message", "청약정보를 삭제했습니다."
+                address = address_line(listing)
+                if address:
+                    st.write(address)
+
+            with image_column:
+                if listing.get("image_url"):
+                    st.image(listing["image_url"], use_container_width=True)
+
+            # 금액은 가장 먼저 확인하는 값이라 나란히 크게 둡니다.
+            deposit_column, rent_column = st.columns(2)
+            deposit_column.caption("보증금")
+            deposit_column.markdown(f"**{format_won(listing.get('deposit'))}**")
+            rent_column.caption("월세")
+            rent_column.markdown(f"**{format_won(listing.get('monthly_rent'))}**")
+
+            st.caption(period_line(listing))
+
+            # 설명이 길어 목록이 늘어지므로 첫 줄만 보여 주고 접어 둡니다.
+            preview = description_preview(listing)
+            if preview:
+                with st.expander(f"상세 정보  ·  {preview}"):
+                    # 줄바꿈 하나는 마크다운에서 공백이 되어 항목이 한 줄로 붙습니다.
+                    # 줄마다 따로 그려 항목이 구분되게 합니다.
+                    for line in description_lines(listing):
+                        st.markdown(format_description_line(line))
+
+            link_column, edit_column = st.columns(2)
+
+            with link_column:
+                if listing.get("source_url"):
+                    st.link_button(
+                        "공고 원문 보기",
+                        listing["source_url"],
+                        use_container_width=True,
+                    )
+
+            with edit_column:
+                # 수정 버튼을 누르면 이 공고 하나만 수정 화면으로 보여줍니다.
+                if st.button(
+                    "수정",
+                    use_container_width=True,
+                    key=f"edit-listing-{listing['id']}",
+                ):
+                    open_edit(listing["id"])
+
+            with st.expander("이 공고 삭제"):
+                st.warning("삭제한 청약정보는 복구할 수 없습니다.")
+                delete_confirmed = st.checkbox(
+                    "삭제에 동의합니다.",
+                    key=f"delete-confirm-{listing['id']}",
                 )
-                st.rerun()
+                if st.button(
+                    "삭제",
+                    type="primary",
+                    disabled=not delete_confirmed,
+                    use_container_width=True,
+                    key=f"delete-listing-{listing['id']}",
+                ):
+                    result = delete_listing(listing["id"])
+                    st.session_state.listing_message = result.get(
+                        "message", "청약정보를 삭제했습니다."
+                    )
+                    st.rerun()
 
     # 검색 결과일 때는 페이지 이동 버튼을 두지 않습니다.
     if total_pages is None:
@@ -401,6 +442,12 @@ def show_listing_edit(listing_id: int) -> None:
             placeholder="자치구를 선택해 주세요",
             key=f"edit-location-{listing_id}",
         )
+        detail_address = st.text_input(
+            "상세주소 (선택)",
+            value=listing.get("detail_address") or "",
+            placeholder="예: 서울 강남구 도곡로 464",
+            key=f"edit-detail-address-{listing_id}",
+        )
         deposit = st.number_input(
             "보증금",
             min_value=0,
@@ -482,6 +529,7 @@ def show_listing_edit(listing_id: int) -> None:
         "area_sqm": str(area_sqm),
         "recruitment_count": str(int(recruitment_count)),
         "location": location,
+        "detail_address": detail_address.strip(),
         "deposit": str(int(deposit)),
         "monthly_rent": str(int(monthly_rent)),
         "application_start_date": application_start_date.isoformat(),
