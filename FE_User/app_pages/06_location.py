@@ -169,17 +169,17 @@ if matching_listings:
                 st.error("공고 주소의 좌표를 확인할 수 없습니다.")
                 st.stop()
 
-        facility_response = get_nearby_facilities(
-            latitude=latitude,
-            longitude=longitude,
-            radius_m=radius_m,
-            limit=DEFAULT_FACILITY_LIMIT,
-)
-        facilities = facility_response.get("data") or {}
+            facility_response = get_nearby_facilities(
+                latitude=latitude,
+                longitude=longitude,
+                radius_m=radius_m,
+                limit=DEFAULT_FACILITY_LIMIT,
+            )
+            facilities = facility_response.get("data") or {}
 
-        stations = facilities.get("subways") or []
-        marts = facilities.get("marts") or []
-        hospitals = facilities.get("hospitals") or []
+            stations = facilities.get("subways") or []
+            marts = facilities.get("marts") or []
+            hospitals = facilities.get("hospitals") or []
     except BackendAPIError as error:
         st.error(str(error))
         st.stop()

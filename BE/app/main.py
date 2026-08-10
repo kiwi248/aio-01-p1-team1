@@ -37,17 +37,9 @@ tags_metadata = [
         "name": "Listing",
         "description": "청약정보 조회 및 조건검색",
     },
-        {
-        "name": "Listing",
-        "description": "청약정보 조회 및 조건검색",
-    },
     {
         "name": "Location",
         "description": "주소 좌표 변환 및 주변 생활권 시설 조회",
-    },
-    {
-        "name": "Favorite",
-        "description": "mypage 즐겨찾기 등록/조회/삭제",
     },
     {
         "name": "Favorite",
