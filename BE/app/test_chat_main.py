@@ -1,14 +1,16 @@
-"""실제 app/main.py 구조에 AI 상담 라우터만 추가한 통합 테스트 서버입니다.
+"""최신 app/main.py 구조에 AI 상담 라우터만 추가한 통합 테스트 서버입니다.
 
-기존 app/main.py는 수정하지 않습니다. 이 파일은 8010 포트에서 기존 API와
+실제 app/main.py는 수정하지 않습니다. 이 파일은 8010 포트에서 기존 API와
 AI 상담 API가 함께 동작하는지 확인할 때 사용합니다.
 """
 
-from contextlib import asynccontextmanager
+import os
+import time
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.log_store import start_simulator_thread
+from app.core.log_store import add_log
 from app.exceptions.handlers import register_exception_handlers
 from app.routers.admin_router import admin_router
 from app.routers.chat_router import chat_router
@@ -18,11 +20,8 @@ from app.routers.log_router import log_router
 from app.routers.profile_router import profile_router
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # 실제 앱과 같은 시작 흐름을 사용해 기존 기능과의 충돌도 함께 확인합니다.
-    start_simulator_thread()
-    yield
+EXCLUDED_LOG_PATHS = {"/logs", "/logs/history", "/docs", "/redoc", "/openapi.json"}
+SLOW_RESPONSE_THRESHOLD_MS = 3000
 
 
 tags_metadata = [
@@ -32,7 +31,7 @@ tags_metadata = [
     },
     {
         "name": "Profile",
-        "description": "mypage 프로필 조회/수정",
+        "description": "mypage 프로필(닉네임) 조회/수정. 회원가입·로그인은 Supabase Auth가 처리합니다.",
     },
     {
         "name": "Listing",
@@ -44,7 +43,7 @@ tags_metadata = [
     },
     {
         "name": "Log",
-        "description": "실시간 로그 대시보드용 조회 API",
+        "description": "실시간 요청 로그 조회 API (메모리 buffer + warning/error는 Supabase에도 저장)",
     },
     {
         "name": "Chat",
@@ -55,17 +54,64 @@ tags_metadata = [
 app = FastAPI(
     title="공공임대 청약 통합 안내 서비스 - AI 통합 테스트",
     openapi_tags=tags_metadata,
-    lifespan=lifespan,
 )
+
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",")
+    if origin.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """최신 실제 앱과 같은 기준으로 테스트 요청 로그를 기록합니다."""
+
+    if request.url.path in EXCLUDED_LOG_PATHS:
+        return await call_next(request)
+
+    screen = f"{request.method} {request.url.path}"
+    start = time.perf_counter()
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        add_log("error", screen, "처리되지 않은 예외 발생", latency_ms)
+        raise
+
+    latency_ms = int((time.perf_counter() - start) * 1000)
+    status_code = response.status_code
+
+    if status_code >= 500:
+        level = "error"
+        message = f"서버 오류 ({status_code})"
+    elif status_code >= 400:
+        level = "warning"
+        message = f"클라이언트 오류 ({status_code})"
+    elif latency_ms >= SLOW_RESPONSE_THRESHOLD_MS:
+        level = "warning"
+        message = "느린 응답 감지"
+    else:
+        level = "info"
+        message = "정상 처리"
+
+    add_log(level, screen, message, latency_ms)
+    return response
+
 
 register_exception_handlers(app)
 
-# 실제 main.py에 등록된 기존 라우터입니다.
 app.include_router(admin_router)
 app.include_router(profile_router)
 app.include_router(listing_router)
 app.include_router(favorite_router)
 app.include_router(log_router)
-
-# 통합 테스트에서만 추가한 AI 상담 라우터입니다.
 app.include_router(chat_router)

@@ -7,6 +7,12 @@ test_chat_main.py를 사용하도록 이 테스트 프로세스 안에서만 주
 import os
 
 import streamlit as st
+st.set_page_config(
+    page_title="청약 정보 안내 - AI 통합 테스트",
+    page_icon="🏘️",
+    layout="wide",
+)
+
 from streamlit_session_browser_storage import SessionStorage
 
 import core.api_client as api_client
@@ -21,18 +27,12 @@ api_client.BACKEND_URL = TEST_BACKEND_URL
 os.environ["CHAT_BACKEND_URL"] = TEST_BACKEND_URL
 
 
-st.set_page_config(
-    page_title="청약 정보 안내 - AI 통합 테스트",
-    page_icon="🏘️",
-    layout="wide",
-)
-
-
 home_page = st.Page("app_pages/02_home.py", title="홈", icon="🏠", default=True)
 login_page = st.Page("app_pages/00_login.py", title="로그인", icon="🔐")
 signup_page = st.Page("app_pages/01_signup.py", title="회원가입", icon="📝")
 listings_page = st.Page("app_pages/03_listings.py", title="청약정보 조회", icon="📋")
 mypage_page = st.Page("app_pages/04_mypage.py", title="My Page", icon="⭐")
+favorite_page = st.Page("app_pages/05_favorite.py", title="즐겨찾기", icon="❤️")
 
 # 실제 app.py에는 아직 없는 AI 상담 페이지만 추가합니다.
 ai_chat_page = st.Page("app_pages/05_ai_chat.py", title="AI 채팅 상담", icon="🤖")
@@ -45,6 +45,7 @@ pages = [
     signup_page,
     listings_page,
     mypage_page,
+    favorite_page,
     ai_chat_page,
 ]
 navigation = st.navigation(pages, position="hidden")
@@ -89,6 +90,7 @@ with st.sidebar:
     st.page_link(listings_page)
 
     if is_logged_in():
+        st.page_link(favorite_page)
         st.page_link(mypage_page)
         st.page_link(ai_chat_page)
         st.divider()
