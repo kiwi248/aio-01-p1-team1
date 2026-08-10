@@ -6,6 +6,7 @@ from clients.favorite_client import create_favorite
 from clients.listing_client import get_listings, search_listings
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
+from core.area_format import format_area
 from core.constants import SEOUL_DISTRICTS
 from core.dday import dday_label, is_closed
 
@@ -54,7 +55,7 @@ try:
                     f"자치구: {listing.get('location') or '-'}"
                 )
                 st.write(
-                    f"면적: {listing.get('area_sqm') or '-'}㎡  |  "
+                    f"면적: {format_area(listing.get('area_sqm'))}  |  "
                     f"모집 인원: {listing.get('recruitment_count') or '-'}명"
                 )
                 st.write(

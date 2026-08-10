@@ -15,6 +15,7 @@ from clients.listing_client import (
 )
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
+from core.area_format import format_area
 from core.constants import SEOUL_DISTRICTS
 from core.image_delete import should_show_delete_button, summarize_result
 from core.page_params import (
@@ -244,7 +245,7 @@ def show_listing_list() -> None:
                 f"자치구: {listing.get('location') or '-'}"
             )
             st.write(
-                f"면적: {listing.get('area_sqm') or '-'}㎡  |  "
+                f"면적: {format_area(listing.get('area_sqm'))}  |  "
                 f"모집 인원: {listing.get('recruitment_count') or '-'}명"
             )
             st.write(
