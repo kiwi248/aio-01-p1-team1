@@ -54,3 +54,25 @@ class NearbyStation(BaseModel):
         ge=1,
         examples=[7],
     )
+
+
+class NearbyFacility(NearbyStation):
+    """공고 위치 주변의 생활권 시설 정보입니다."""
+
+    category: Literal["subway", "mart", "hospital"] = Field(
+        examples=["subway"],
+    )
+
+
+class NearbyFacilities(BaseModel):
+    """시설 종류별 주변 생활권 검색 결과입니다."""
+
+    subways: list[NearbyFacility] = Field(
+        default_factory=list,
+    )
+    marts: list[NearbyFacility] = Field(
+        default_factory=list,
+    )
+    hospitals: list[NearbyFacility] = Field(
+        default_factory=list,
+    )

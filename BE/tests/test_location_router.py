@@ -8,6 +8,8 @@ from app.exceptions.handlers import register_exception_handlers
 from app.routers.location_router import location_router
 from app.schemas.location_schema import (
     GeocodeResult,
+    NearbyFacilities,
+    NearbyFacility,
     NearbyStation,
 )
 
@@ -165,6 +167,85 @@ class NearbySubwayRouterTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         self.assertFalse(response.json()["success"])
+
+
+class NearbyFacilitiesRouterTest(unittest.TestCase):
+    @patch(
+        "app.routers.location_router.find_nearby_living_facilities"
+    )
+    def test_주변_생활권_시설을_반환한다(
+        self,
+        find_nearby_living_facilities,
+    ):
+        find_nearby_living_facilities.return_value = NearbyFacilities(
+            subways=[
+                NearbyFacility(
+                    category="subway",
+                    name="시청역 1호선",
+                    address="서울 중구 세종대로",
+                    latitude=37.5654,
+                    longitude=126.9771,
+                    distance_m=130,
+                    estimated_walking_minutes=3,
+                )
+            ],
+            marts=[
+                NearbyFacility(
+                    category="mart",
+                    name="서울역 롯데마트",
+                    address="서울 중구 한강대로",
+                    latitude=37.5560,
+                    longitude=126.9706,
+                    distance_m=800,
+                    estimated_walking_minutes=14,
+                )
+            ],
+            hospitals=[
+                NearbyFacility(
+                    category="hospital",
+                    name="서울시립병원",
+                    address="서울 중구 을지로",
+                    latitude=37.5660,
+                    longitude=126.9820,
+                    distance_m=500,
+                    estimated_walking_minutes=9,
+                )
+            ],
+        )
+
+        response = client.get(
+            "/locations/nearby-facilities",
+            params={
+                "latitude": 37.5663,
+                "longitude": 126.9779,
+                "radius_m": 2000,
+                "limit": 3,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()["data"]
+
+        self.assertEqual(
+            data["subways"][0]["name"],
+            "시청역 1호선",
+        )
+        self.assertEqual(
+            data["marts"][0]["category"],
+            "mart",
+        )
+        self.assertEqual(
+            data["hospitals"][0]["category"],
+            "hospital",
+        )
+
+        find_nearby_living_facilities.assert_called_once_with(
+            latitude=37.5663,
+            longitude=126.9779,
+            radius_m=2000,
+            limit=3,
+        )
 
 
 if __name__ == "__main__":

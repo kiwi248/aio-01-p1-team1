@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query
 
 from app.core.api_response import ApiResponse
 from app.services.location_service import (
+    find_nearby_living_facilities,
     find_nearby_subway_stations,
     geocode_address,
 )
@@ -70,4 +71,45 @@ def nearby_subways(
         success=True,
         message="주변 지하철역을 조회했습니다.",
         data=stations,
+    )
+
+
+@location_router.get("/nearby-facilities")
+def nearby_facilities(
+    latitude: float = Query(
+        ge=-90,
+        le=90,
+        examples=[37.566370776634],
+    ),
+    longitude: float = Query(
+        ge=-180,
+        le=180,
+        examples=[126.977918351844],
+    ),
+    radius_m: int = Query(
+        default=2000,
+        ge=100,
+        le=20000,
+        examples=[2000],
+    ),
+    limit: int = Query(
+        default=3,
+        ge=1,
+        le=15,
+        examples=[3],
+    ),
+) -> ApiResponse:
+    """입력한 좌표 주변의 지하철역·마트·병원을 조회합니다."""
+
+    facilities = find_nearby_living_facilities(
+        latitude=latitude,
+        longitude=longitude,
+        radius_m=radius_m,
+        limit=limit,
+    )
+
+    return ApiResponse(
+        success=True,
+        message="주변 생활권 시설을 조회했습니다.",
+        data=facilities,
     )

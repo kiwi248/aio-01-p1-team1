@@ -33,3 +33,23 @@ def get_nearby_subways(
             "limit": limit,
         },
     )
+
+
+def get_nearby_facilities(
+    latitude: float,
+    longitude: float,
+    radius_m: int = 2000,
+    limit: int = 3,
+):
+    """주변 지하철역·마트·병원을 함께 조회합니다."""
+
+    return request(
+        "GET",
+        "/locations/nearby-facilities",
+        params={
+            "latitude": latitude,
+            "longitude": longitude,
+            "radius_m": radius_m,
+            "limit": limit,
+        },
+    )

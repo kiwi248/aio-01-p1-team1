@@ -7,8 +7,7 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import HTTPException
 
-from app.schemas.location_schema import GeocodeResult, NearbyStation
-
+from app.schemas.location_schema import (GeocodeResult, NearbyFacilities, NearbyFacility, NearbyStation)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENV_PATH = PROJECT_ROOT / ".env"
@@ -23,6 +22,21 @@ KAKAO_CATEGORY_SEARCH_URL = (
     "https://dapi.kakao.com/v2/local/search/category.json"
 )
 REQUEST_TIMEOUT = 10.0
+
+
+FacilityCategory = Literal["subway", "mart", "hospital"]
+
+FACILITY_CATEGORY_CODES: dict[FacilityCategory, str] = {
+    "subway": "SW8",
+    "mart": "MT1",
+    "hospital": "HP8",
+}
+
+FACILITY_CATEGORY_LABELS: dict[FacilityCategory, str] = {
+    "subway": "지하철역",
+    "mart": "마트",
+    "hospital": "병원",
+}
 
 
 def get_kakao_api_key() -> str:
@@ -200,13 +214,13 @@ def estimate_walking_minutes(distance_m: int) -> int:
     return max(1, estimated_minutes)
 
 
-def find_nearby_subway_stations(
+def validate_search_options(
     latitude: float,
     longitude: float,
-    radius_m: int = 2000,
-    limit: int = 3,
-) -> list[NearbyStation]:
-    """주어진 좌표 반경 내 가까운 지하철역을 검색합니다."""
+    radius_m: int,
+    limit: int,
+) -> None:
+    """주변 시설 검색에 사용하는 좌표와 검색 조건을 확인합니다."""
 
     if not -90 <= latitude <= 90:
         raise HTTPException(
@@ -232,10 +246,30 @@ def find_nearby_subway_stations(
             detail="조회 개수는 1개 이상 15개 이하여야 합니다.",
         )
 
+
+def find_nearby_facilities(
+    category: FacilityCategory,
+    latitude: float,
+    longitude: float,
+    radius_m: int = 2000,
+    limit: int = 3,
+) -> list[NearbyFacility]:
+    """주어진 좌표 주변에서 지정한 종류의 시설을 검색합니다."""
+
+    validate_search_options(
+        latitude=latitude,
+        longitude=longitude,
+        radius_m=radius_m,
+        limit=limit,
+    )
+
+    category_code = FACILITY_CATEGORY_CODES[category]
+    category_label = FACILITY_CATEGORY_LABELS[category]
+
     payload = request_kakao(
         KAKAO_CATEGORY_SEARCH_URL,
         params={
-            "category_group_code": "SW8",
+            "category_group_code": category_code,
             "x": longitude,
             "y": latitude,
             "radius": radius_m,
@@ -245,13 +279,14 @@ def find_nearby_subway_stations(
     )
 
     documents = payload.get("documents") or []
-    stations: list[NearbyStation] = []
+    facilities: list[NearbyFacility] = []
 
     for document in documents:
         try:
             distance_m = int(document.get("distance") or 0)
 
-            station = NearbyStation(
+            facility = NearbyFacility(
+                category=category,
                 name=document["place_name"],
                 address=(
                     document.get("road_address_name")
@@ -268,9 +303,66 @@ def find_nearby_subway_stations(
         except (KeyError, TypeError, ValueError) as error:
             raise HTTPException(
                 status_code=502,
-                detail="지하철역 검색 결과 형식이 올바르지 않습니다.",
+                detail=f"{category_label} 검색 결과 형식이 올바르지 않습니다.",
             ) from error
 
-        stations.append(station)
+        facilities.append(facility)
 
-    return stations
+    return facilities
+
+
+def find_nearby_subway_stations(
+    latitude: float,
+    longitude: float,
+    radius_m: int = 2000,
+    limit: int = 3,
+) -> list[NearbyStation]:
+    """기존 지하철역 API와 호환되는 결과를 반환합니다."""
+
+    facilities = find_nearby_facilities(
+        category="subway",
+        latitude=latitude,
+        longitude=longitude,
+        radius_m=radius_m,
+        limit=limit,
+    )
+
+    return [
+        NearbyStation.model_validate(
+            facility.model_dump(exclude={"category"})
+        )
+        for facility in facilities
+    ]
+
+
+def find_nearby_living_facilities(
+    latitude: float,
+    longitude: float,
+    radius_m: int = 2000,
+    limit: int = 3,
+) -> NearbyFacilities:
+    """주변 지하철역·마트·병원을 시설 종류별로 조회합니다."""
+
+    return NearbyFacilities(
+        subways=find_nearby_facilities(
+            category="subway",
+            latitude=latitude,
+            longitude=longitude,
+            radius_m=radius_m,
+            limit=limit,
+        ),
+        marts=find_nearby_facilities(
+            category="mart",
+            latitude=latitude,
+            longitude=longitude,
+            radius_m=radius_m,
+            limit=limit,
+        ),
+        hospitals=find_nearby_facilities(
+            category="hospital",
+            latitude=latitude,
+            longitude=longitude,
+            radius_m=radius_m,
+            limit=limit,
+        ),
+    )

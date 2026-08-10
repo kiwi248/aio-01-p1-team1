@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from app.services.location_service import (
     estimate_walking_minutes,
+    find_nearby_living_facilities,
     find_nearby_subway_stations,
     geocode_address,
 )
@@ -173,6 +174,92 @@ class NearbySubwayTest(unittest.TestCase):
         )
 
         self.assertEqual(stations, [])
+
+
+
+class NearbyLivingFacilitiesTest(unittest.TestCase):
+    @patch("app.services.location_service.request_kakao")
+    def test_지하철역_마트_병원을_함께_반환한다(
+        self,
+        request_kakao,
+    ):
+        request_kakao.side_effect = [
+            {
+                "documents": [
+                    {
+                        "place_name": "시청역 1호선",
+                        "road_address_name": "서울 중구 세종대로",
+                        "x": "126.9771",
+                        "y": "37.5654",
+                        "distance": "130",
+                    }
+                ],
+            },
+            {
+                "documents": [
+                    {
+                        "place_name": "서울역 롯데마트",
+                        "road_address_name": "서울 중구 한강대로",
+                        "x": "126.9706",
+                        "y": "37.5560",
+                        "distance": "800",
+                    }
+                ],
+            },
+            {
+                "documents": [
+                    {
+                        "place_name": "서울시립병원",
+                        "road_address_name": "서울 중구 을지로",
+                        "x": "126.9820",
+                        "y": "37.5660",
+                        "distance": "500",
+                    }
+                ],
+            },
+        ]
+
+        facilities = find_nearby_living_facilities(
+            latitude=37.5663,
+            longitude=126.9779,
+            radius_m=2000,
+            limit=3,
+        )
+
+        self.assertEqual(
+            facilities.subways[0].name,
+            "시청역 1호선",
+        )
+        self.assertEqual(
+            facilities.subways[0].category,
+            "subway",
+        )
+        self.assertEqual(
+            facilities.marts[0].name,
+            "서울역 롯데마트",
+        )
+        self.assertEqual(
+            facilities.marts[0].category,
+            "mart",
+        )
+        self.assertEqual(
+            facilities.hospitals[0].name,
+            "서울시립병원",
+        )
+        self.assertEqual(
+            facilities.hospitals[0].category,
+            "hospital",
+        )
+
+        category_codes = [
+            call.kwargs["params"]["category_group_code"]
+            for call in request_kakao.call_args_list
+        ]
+
+        self.assertEqual(
+            category_codes,
+            ["SW8", "MT1", "HP8"],
+        )
 
 
 if __name__ == "__main__":
