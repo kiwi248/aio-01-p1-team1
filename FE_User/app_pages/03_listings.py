@@ -102,6 +102,8 @@ try:
                         f"자치구: {listing.get('location') or '-'}"
                     )
                 )
+                if listing.get("detail_address"):
+                    st.markdown(dim(f"주소: {listing['detail_address']}"))
                 st.markdown(
                     dim(
                         f"면적: {format_area(listing.get('area_sqm'))}  |  "

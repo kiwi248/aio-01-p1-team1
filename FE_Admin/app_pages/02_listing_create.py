@@ -40,6 +40,11 @@ with st.form(form_key(nonce), clear_on_submit=False):
         placeholder="자치구를 선택해 주세요",
         key=field_key("location", nonce),
     )
+    detail_address = st.text_input(
+        "상세주소 (선택)",
+        placeholder="예: 서울 강남구 도곡로 464",
+        key=field_key("detail-address", nonce),
+    )
     deposit = st.number_input(
         "보증금", min_value=0, step=10000, key=field_key("deposit", nonce)
     )
@@ -102,6 +107,7 @@ if submitted:
             "area_sqm": float(area_sqm),
             "recruitment_count": int(recruitment_count),
             "location": location,
+            "detail_address": detail_address.strip() or None,
             "deposit": int(deposit),
             "monthly_rent": int(monthly_rent),
             "application_start_date": application_start_date.isoformat(),
