@@ -140,7 +140,7 @@ def show_listing_detail(listing: dict) -> None:
         )
 
 
-st.title("생활권 분석")
+st.title("주변생활권 분석")
 st.caption(
     "청약정보에 등록된 공고명 또는 공고주소를 검색하면 "
     "주변 지하철역·마트·병원 정보를 알려드립니다."
