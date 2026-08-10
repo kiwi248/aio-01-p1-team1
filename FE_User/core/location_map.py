@@ -1,6 +1,7 @@
 """생활권 분석 결과를 PyDeck 지도로 만드는 모듈입니다."""
 
 from typing import Any
+from urllib.parse import quote
 
 import pydeck as pdk
 
@@ -29,6 +30,40 @@ FACILITY_STYLES = {
 }
 
 
+def make_icon_data(icon: str) -> dict[str, Any]:
+    """이모지를 PyDeck IconLayer에서 사용할 SVG 이미지로 만듭니다."""
+
+    svg = f"""
+    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+        <circle
+            cx="32"
+            cy="32"
+            r="29"
+            fill="white"
+            stroke="#374151"
+            stroke-width="3"
+        />
+        <text
+            x="32"
+            y="43"
+            text-anchor="middle"
+            font-size="32"
+            font-family="Segoe UI Emoji, Apple Color Emoji, sans-serif"
+        >{icon}</text>
+    </svg>
+    """
+
+    return {
+        "url": (
+            "data:image/svg+xml;charset=utf-8,"
+            + quote(svg)
+        ),
+        "width": 64,
+        "height": 64,
+        "anchorY": 32,
+    }
+
+
 def make_listing_point(
     title: str,
     latitude: float,
@@ -40,12 +75,13 @@ def make_listing_point(
         "name": title,
         "category_label": "공고 위치",
         "icon": "🏠",
+        "icon_data": make_icon_data("🏠"),
         "color": [245, 130, 32],
         "latitude": latitude,
         "longitude": longitude,
         "distance_label": "기준 위치",
         "walking_label": "",
-        "map_label": f"🏠 {title}",
+        "map_label": title,
     }
 
 
@@ -83,13 +119,14 @@ def make_facility_point(
         "name": name,
         "category_label": style["label"],
         "icon": style["icon"],
+        "icon_data": make_icon_data(style["icon"]),
         "color": style["color"],
         "latitude": latitude,
         "longitude": longitude,
         "distance_label": distance_label,
         "walking_label": walking_label,
         "map_label": (
-            f"{style['icon']} {name}\n"
+            f"{name}\n"
             f"{distance_label} · 도보 {walking_minutes}분"
         ),
     }
@@ -169,13 +206,14 @@ def build_location_deck(
             width_min_pixels=1,
         ),
         pdk.Layer(
-            "ScatterplotLayer",
+            "IconLayer",
             data=all_points,
             get_position="[longitude, latitude]",
-            get_fill_color="color",
-            get_radius=70,
-            radius_min_pixels=8,
-            radius_max_pixels=18,
+            get_icon="icon_data",
+            get_size=40,
+            size_scale=1,
+            size_min_pixels=32,
+            size_max_pixels=48,
             pickable=True,
         ),
         pdk.Layer(
