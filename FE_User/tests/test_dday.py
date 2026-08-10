@@ -7,7 +7,7 @@
 import unittest
 from datetime import date
 
-from core.dday import days_left, dday_label, is_closed
+from core.dday import days_left, dday_label, dim_if_closed, is_closed
 
 
 TODAY = date(2026, 8, 10)
@@ -73,6 +73,40 @@ class SortOrderTest(unittest.TestCase):
         ]
         labels = [dday_label(x["application_end_date"], TODAY) for x in listings]
         self.assertEqual(labels, ["D-2", "D-DAY", "D-10"])
+
+
+class DimIfClosedTest(unittest.TestCase):
+    """신청이 끝난 공고만 흐린 회색으로 바꿉니다."""
+
+    def test_마감된_공고는_회색_표기를_붙인다(self):
+        self.assertEqual(dim_if_closed("방화동원룸", True), ":gray[방화동원룸]")
+
+    def test_마감되지_않은_공고는_그대로_둔다(self):
+        self.assertEqual(dim_if_closed("방화동원룸", False), "방화동원룸")
+
+    def test_대괄호가_있어도_표기가_깨지지_않는다(self):
+        """제목에 [더미데이터] 같은 값이 들어올 수 있습니다."""
+        result = dim_if_closed("[더미데이터] 공고", True)
+
+        self.assertTrue(result.startswith(":gray["))
+        self.assertTrue(result.endswith("]"))
+        # 안쪽 대괄호가 남아 있으면 색 표기가 중간에서 끊깁니다.
+        self.assertNotIn("[", result[6:-1])
+        self.assertNotIn("]", result[6:-1])
+
+    def test_대괄호를_비슷한_글자로_바꾼다(self):
+        result = dim_if_closed("[공고]", True)
+        self.assertIn("［공고］", result)
+
+    def test_마감되지_않으면_대괄호를_바꾸지_않는다(self):
+        self.assertEqual(dim_if_closed("[공고]", False), "[공고]")
+
+    def test_값이_없어도_오류가_나지_않는다(self):
+        self.assertEqual(dim_if_closed(None, False), "")
+        self.assertEqual(dim_if_closed(None, True), ":gray[]")
+
+    def test_숫자도_글자로_바꿔_처리한다(self):
+        self.assertEqual(dim_if_closed(123, False), "123")
 
 
 if __name__ == "__main__":

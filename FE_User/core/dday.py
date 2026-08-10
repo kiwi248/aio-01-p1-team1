@@ -56,3 +56,20 @@ def is_closed(end_date: object, today: date | None = None) -> bool:
         return False
 
     return remaining < 0
+
+
+def dim_if_closed(text: object, closed: bool) -> str:
+    """신청이 끝난 공고의 글자를 흐린 회색으로 바꿉니다.
+
+    Streamlit의 색 표기는 대괄호를 쓰기 때문에, 글 안에 닫는 대괄호가 있으면
+    표기가 깨집니다. 공고 제목에 "[테스트데이터]" 같은 값이 들어올 수 있어
+    대괄호를 비슷한 모양의 다른 글자로 바꿔 두고 색을 입힙니다.
+    """
+
+    body = "" if text is None else str(text)
+
+    if not closed:
+        return body
+
+    safe = body.replace("[", "［").replace("]", "］")
+    return f":gray[{safe}]"

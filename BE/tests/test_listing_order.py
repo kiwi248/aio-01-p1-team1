@@ -87,5 +87,101 @@ class ListingOrderTest(unittest.TestCase):
         self.assertFalse(desc)
 
 
+class MoveClosedToEndTest(unittest.TestCase):
+    """신청이 끝난 공고를 목록 맨 뒤로 보냅니다."""
+
+    @staticmethod
+    def _listing(listing_id: int, end: str):
+        from datetime import date, datetime
+        from decimal import Decimal
+
+        from app.schemas.listing_schema import ListingPublic
+
+        return ListingPublic(
+            id=listing_id,
+            title="공고",
+            housing_name="주택",
+            area_sqm=Decimal("20.00"),
+            recruitment_count=1,
+            location="중구",
+            deposit=0,
+            monthly_rent=0,
+            application_start_date=date(2026, 1, 1),
+            application_end_date=date.fromisoformat(end),
+            description="설명",
+            image_url=None,
+            source_url="https://example.com",
+            created_at=datetime(2026, 1, 1, 0, 0, 0),
+        )
+
+    def test_마감된_공고가_뒤로_간다(self):
+        from datetime import date
+
+        from app.services.listing_service import move_closed_to_end
+
+        today = date(2026, 8, 10)
+        # 들어오는 순서는 마감일 오름차순입니다.
+        listings = [
+            self._listing(1, "2026-08-01"),  # 마감
+            self._listing(2, "2026-08-05"),  # 마감
+            self._listing(3, "2026-08-10"),  # 오늘 마감 - 아직 신청 가능
+            self._listing(4, "2026-08-20"),
+        ]
+
+        result = move_closed_to_end(listings, today)
+
+        self.assertEqual([x.id for x in result], [3, 4, 2, 1])
+
+    def test_오늘_마감은_아직_신청할_수_있는_것으로_본다(self):
+        from datetime import date
+
+        from app.services.listing_service import move_closed_to_end
+
+        result = move_closed_to_end([self._listing(1, "2026-08-10")], date(2026, 8, 10))
+
+        self.assertEqual([x.id for x in result], [1])
+
+    def test_마감된_것끼리는_최근에_끝난_순이다(self):
+        from datetime import date
+
+        from app.services.listing_service import move_closed_to_end
+
+        listings = [
+            self._listing(1, "2026-07-01"),
+            self._listing(2, "2026-08-01"),
+        ]
+
+        result = move_closed_to_end(listings, date(2026, 8, 10))
+
+        self.assertEqual([x.id for x in result], [2, 1])
+
+    def test_건수가_줄지_않는다(self):
+        from datetime import date
+
+        from app.services.listing_service import move_closed_to_end
+
+        listings = [self._listing(i, "2026-08-01") for i in range(5)]
+
+        self.assertEqual(len(move_closed_to_end(listings, date(2026, 8, 10))), 5)
+
+    def test_모두_신청_가능하면_순서가_그대로다(self):
+        from datetime import date
+
+        from app.services.listing_service import move_closed_to_end
+
+        listings = [self._listing(1, "2026-08-20"), self._listing(2, "2026-08-25")]
+
+        result = move_closed_to_end(listings, date(2026, 8, 10))
+
+        self.assertEqual([x.id for x in result], [1, 2])
+
+    def test_빈_목록도_안전하다(self):
+        from datetime import date
+
+        from app.services.listing_service import move_closed_to_end
+
+        self.assertEqual(move_closed_to_end([], date(2026, 8, 10)), [])
+
+
 if __name__ == "__main__":
     unittest.main()
