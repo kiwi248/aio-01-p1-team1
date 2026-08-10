@@ -164,11 +164,11 @@ class FormatDescriptionLineTest(unittest.TestCase):
     def test_항목_이름을_굵게_만든다(self):
         self.assertEqual(
             format_description_line("신청자격 : 서울 거주 1인 무주택세대구성원"),
-            "**신청자격**  서울 거주 1인 무주택세대구성원",
+            "**신청자격** : 서울 거주 1인 무주택세대구성원",
         )
 
     def test_콜론_앞에_공백이_없어도_나눈다(self):
-        self.assertEqual(format_description_line("소득기준: 70% 이하"), "**소득기준**  70% 이하")
+        self.assertEqual(format_description_line("소득기준: 70% 이하"), "**소득기준** : 70% 이하")
 
     def test_콜론이_없으면_그대로_둔다(self):
         self.assertEqual(format_description_line("안내 문구입니다"), "안내 문구입니다")
@@ -176,7 +176,7 @@ class FormatDescriptionLineTest(unittest.TestCase):
     def test_값에_콜론이_또_있어도_첫_번째만_나눈다(self):
         self.assertEqual(
             format_description_line("문의 : 전화 : 1600-3456"),
-            "**문의**  전화 : 1600-3456",
+            "**문의** : 전화 : 1600-3456",
         )
 
     def test_값이_비어_있으면_그대로_둔다(self):

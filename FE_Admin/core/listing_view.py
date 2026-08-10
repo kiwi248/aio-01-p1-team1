@@ -105,7 +105,7 @@ def description_lines(listing: dict) -> list[str]:
 
 
 def format_description_line(line: object) -> str:
-    """"신청자격 : 값" 을 "**신청자격** 값" 으로 바꿉니다.
+    """"신청자격 : 값" 을 "**신청자격** : 값" 으로 바꿉니다.
 
     항목 이름을 굵게 해서 눈으로 훑기 쉽게 합니다.
     콜론이 없는 줄은 그대로 둡니다.
@@ -121,7 +121,7 @@ def format_description_line(line: object) -> str:
             label = label.strip()
             value = value.strip()
             if label and value:
-                return f"**{label}**  {value}"
+                return f"**{label}** : {value}"
             break
 
     return text
