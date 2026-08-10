@@ -1,3 +1,5 @@
+import unicodedata
+
 import streamlit as st
 from clients.listing_client import get_listings
 from clients.location_client import (
@@ -5,6 +7,7 @@ from clients.location_client import (
     get_nearby_facilities,
 )
 from core.api_client import BackendAPIError
+from core.location_map import build_location_deck
 
 
 DEFAULT_RADIUS_M = 2000
@@ -26,13 +29,30 @@ def format_distance(distance_m: int) -> str:
     return f"{distance_m}m"
 
 
+def normalize_search_text(value: object) -> str:
+    """검색어의 대소문자·공백·특수문자 표기를 통일합니다."""
+
+    normalized = unicodedata.normalize(
+        "NFKC",
+        str(value or ""),
+    ).casefold()
+
+    return "".join(normalized.split())
+
+
 def listing_search_text(listing: dict) -> str:
-    """공고에서 검색에 사용할 제목과 주소를 하나의 문자열로 만듭니다."""
+    """공고명·주택명·주소를 하나의 검색 문자열로 만듭니다."""
 
-    title = str(listing.get("title") or "")
-    detail_address = str(listing.get("detail_address") or "")
+    values = [
+        listing.get("title"),
+        listing.get("housing_name"),
+        listing.get("location"),
+        listing.get("detail_address"),
+    ]
 
-    return f"{title} {detail_address}".lower()
+    return normalize_search_text(
+        " ".join(str(value or "") for value in values)
+    )
 
 
 def find_matching_listings(
@@ -41,7 +61,7 @@ def find_matching_listings(
 ) -> list[dict]:
     """입력한 문구가 공고명 또는 공고주소에 들어 있는 공고만 찾습니다."""
 
-    normalized_query = query.strip().lower()
+    normalized_query = normalize_search_text(query)
 
     if not normalized_query:
         return []
@@ -57,11 +77,55 @@ def listing_label(listing: dict) -> str:
     """검색된 공고를 선택 목록에 표시할 문자열을 만듭니다."""
 
     title = str(listing.get("title") or "공고명 없음")
+    housing_name = str(listing.get("housing_name") or "")
     detail_address = str(
         listing.get("detail_address") or "상세주소 없음"
     )
 
-    return f"{title} | {detail_address}"
+    display_name = housing_name or title
+
+    return f"{display_name} | {detail_address}"
+
+
+def render_facility_section(
+    title: str,
+    icon: str,
+    facilities: list[dict],
+    radius_label: str,
+) -> None:
+    """시설 종류별 검색 결과를 동일한 카드 형식으로 표시합니다."""
+
+    st.subheader(f"{icon} {title}")
+
+    if not facilities:
+        st.info(
+            f"반경 {radius_label} 안에서 "
+            f"{title}을(를) 찾지 못했습니다."
+        )
+        return
+
+    for index, facility in enumerate(facilities, start=1):
+        distance_m = int(facility.get("distance_m") or 0)
+        walking_minutes = int(
+            facility.get("estimated_walking_minutes") or 1
+        )
+
+        with st.container(border=True):
+            st.markdown(
+                f"#### {index}. "
+                f"{facility.get('name') or '이름 없는 시설'}"
+            )
+
+            facility_address = facility.get("address") or ""
+
+            if facility_address:
+                st.write(facility_address)
+
+            st.write(
+                f"직선거리 {format_distance(distance_m)} · "
+                f"예상 도보 약 {walking_minutes}분"
+            )
+
 
 st.title("생활권 분석")
 st.caption(
@@ -169,55 +233,77 @@ if matching_listings:
                 st.error("공고 주소의 좌표를 확인할 수 없습니다.")
                 st.stop()
 
-        facility_response = get_nearby_facilities(
-            latitude=latitude,
-            longitude=longitude,
-            radius_m=radius_m,
-            limit=DEFAULT_FACILITY_LIMIT,
-)
-        facilities = facility_response.get("data") or {}
+            facility_response = get_nearby_facilities(
+                latitude=latitude,
+                longitude=longitude,
+                radius_m=radius_m,
+                limit=DEFAULT_FACILITY_LIMIT,
+            )
+            facilities = facility_response.get("data") or {}
 
-        stations = facilities.get("subways") or []
-        marts = facilities.get("marts") or []
-        hospitals = facilities.get("hospitals") or []
+            stations = facilities.get("subways") or []
+            marts = facilities.get("marts") or []
+            hospitals = facilities.get("hospitals") or []
     except BackendAPIError as error:
         st.error(str(error))
         st.stop()
 
+    listing_title = str(
+        selected_listing.get("title") or "공고명 없음"
+    )
+
     st.subheader("선택한 공고")
-    st.write(selected_listing.get("title") or "공고명 없음")
+    st.write(listing_title)
     st.caption(location.get("address") or listing_address)
 
+    st.subheader("주변 생활권 지도")
+
+    location_deck = build_location_deck(
+        title=listing_title,
+        latitude=float(latitude),
+        longitude=float(longitude),
+        stations=stations,
+        marts=marts,
+        hospitals=hospitals,
+        radius_m=radius_m,
+    )
+
+    st.pydeck_chart(
+        location_deck,
+        use_container_width=True,
+    )
+
+    st.caption(
+        "🏠 공고 위치 · 🚇 지하철역 · "
+        "🛒 마트 · 🏥 병원"
+    )
+
     st.divider()
-    st.subheader("가까운 지하철역")
 
-    if not stations:
-        st.info(
-            f"반경 {search_radius_label} 안에서 "
-            "지하철역을 찾지 못했습니다."
-        )
-    else:
-        for index, station in enumerate(stations, start=1):
-            distance_m = int(station.get("distance_m") or 0)
-            walking_minutes = int(
-                station.get("estimated_walking_minutes") or 1
-            )
+    render_facility_section(
+        title="가까운 지하철역",
+        icon="🚇",
+        facilities=stations,
+        radius_label=search_radius_label,
+    )
 
-            with st.container(border=True):
-                st.markdown(
-                    f"### {index}. "
-                    f"{station.get('name') or '이름 없는 역'}"
-                )
+    st.divider()
 
-                station_address = station.get("address") or ""
+    render_facility_section(
+        title="가까운 마트",
+        icon="🛒",
+        facilities=marts,
+        radius_label=search_radius_label,
+    )
 
-                if station_address:
-                    st.write(station_address)
+    st.divider()
 
-                st.write(
-                    f"직선거리 {format_distance(distance_m)} · "
-                    f"예상 도보 약 {walking_minutes}분"
-                )
+    render_facility_section(
+        title="가까운 병원",
+        icon="🏥",
+        facilities=hospitals,
+        radius_label=search_radius_label,
+    )
 
     st.caption(
         "※ 도보시간은 직선거리에 보정값을 적용한 예상치입니다. "
