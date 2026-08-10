@@ -35,7 +35,7 @@ def create(favorite: FavoriteCreate) -> ApiResponse:
 
 
 # 2. mypage 즐겨찾기 조회
-@favorite_router.get("/favorites/{user_id}")
+@favorite_router.get("/mypage/{user_id}")
 def mypage(user_id: str) -> ApiResponse:
     favorites = favorite_get_mypage(user_id)
     return ApiResponse(
@@ -46,7 +46,7 @@ def mypage(user_id: str) -> ApiResponse:
 
 
 # 3. mypage 즐겨찾기 주소를 경도/위도로 변환
-@favorite_router.get("/favorite/{user_id}/coordinates")
+@favorite_router.get("/mypage/{user_id}/coordinates")
 def coordinates(user_id: str) -> ApiResponse:
     try:
         converted = favorite_get_coordinates(user_id)

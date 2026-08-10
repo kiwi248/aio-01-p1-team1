@@ -32,7 +32,7 @@ try:
                     st.write(f"**{listing.get('title') or '제목 없음'}**")
                     st.write(
                         f"대상: {listing.get('type') or '-'}  |  "
-                        f"위치: {listing.get('location') or '-'}  |  "
+                        f"위치: {listing.get('detail_address') or '-'}  |  "
                         f"금액: {int(listing.get('price') or 0):,}원"
                     )
                     if st.button(
@@ -50,13 +50,6 @@ try:
 
         with map_column:
             render_favorite_map(favorites, get_kakao_rest_api_key())
-            
 
 except BackendAPIError as error:
     st.error(str(error))
-
-response = supabase.table('favorites').select(
-    'id, user_id, listings(id, title, detail_address, latitude, longitude)'
-).execute()
-
-print(response.data)

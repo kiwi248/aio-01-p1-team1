@@ -56,7 +56,7 @@ def render_favorite_map(favorites: list[dict], rest_api_key: str) -> None:
         
         for favorite in favorites:
             listing = favorite.get("listing") or {}
-            location = (listing.get("location") or "").strip()
+            location = (listing.get("detail_address") or listing.get("location") or "").strip()
             if not location:
                 continue
 
