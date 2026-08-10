@@ -15,7 +15,7 @@ EMAIL_DOMAINS = [
 
 
 if is_logged_in():
-    st.success("이미 로그인되어 있습니다.")
+    st.success("로그인에 성공했습니다.")
     st.stop()
 
 left_space, login_area, right_space = st.columns([1, 2, 1])
