@@ -53,10 +53,9 @@ def render_favorite_map(favorites: list[dict], rest_api_key: str) -> None:
     failed_locations = []
 
     with st.spinner("즐겨찾기 위치를 찾는 중입니다..."):
-        
         for favorite in favorites:
             listing = favorite.get("listing") or {}
-            location = (listing.get("detail_address") or listing.get("detail_address") or "").strip()
+            location = (listing.get("detail_address") or listing.get("location") or "").strip()
             if not location:
                 continue
 
