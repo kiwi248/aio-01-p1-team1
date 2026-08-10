@@ -6,7 +6,7 @@ from core.auth import is_logged_in, login
 
 
 if is_logged_in():
-    st.success("이미 로그인되어 있습니다.")
+    st.success("로그인에 성공했습니다.")
     st.stop()
 
 st.title("관리자 로그인")
