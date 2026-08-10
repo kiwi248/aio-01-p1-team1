@@ -18,23 +18,32 @@ ENV_PATH = PROJECT_ROOT / ".env"
 
 
 def get_required_env(name: str) -> str:
-    """배포 환경(Streamlit Cloud)에서는 secrets에서, 로컬에서는 .env에서 값을 읽습니다."""
+    """로컬 .env를 먼저 확인하고, 없으면 배포 secrets를 읽습니다."""
 
-    try:
-        value = st.secrets[name]
-    except Exception:
-        load_dotenv(ENV_PATH)
-        value = os.getenv(name, "")
+    load_dotenv(ENV_PATH)
+
+    value = os.getenv(name, "")
+
+    if not value:
+        try:
+            value = st.secrets[name]
+        except Exception:
+            value = ""
 
     value = (value or "").strip()
 
     if not value:
         raise RuntimeError(
-            f"{name} 값이 없습니다. 로컬은 {ENV_PATH}, 배포 환경은 Streamlit Cloud secrets를 확인하세요."
+            f"{name} 값이 없습니다. "
+            f"로컬은 {ENV_PATH}, "
+            "배포 환경은 Streamlit Cloud secrets를 확인하세요."
         )
 
     if value.startswith(("your-", "https://your-")):
-        raise RuntimeError(f"{name} 값이 예시 값입니다. Supabase Dashboard에서 실제 값을 복사해 넣어 주세요.")
+        raise RuntimeError(
+            f"{name} 값이 예시 값입니다. "
+            "Supabase Dashboard에서 실제 값을 복사해 넣어 주세요."
+        )
 
     return value
 
