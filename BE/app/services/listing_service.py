@@ -8,6 +8,41 @@ from app.schemas.listing_schema import ListingCreate, ListingPage, ListingPublic
 DEFAULT_PAGE_SIZE = 10
 MAX_PAGE_SIZE = 100
 
+# 화면에서 고를 수 있는 정렬 기준입니다.
+# 이름 -> (정렬에 쓸 컬럼, 내림차순 여부)
+# 정렬을 화면에서 하지 않고 여기서 하는 이유가 있습니다.
+# 관리자 목록은 한 번에 한 페이지(10건)만 받아 가는데,
+# 받은 10건만 다시 늘어놓으면 전체 기준의 순서가 아니기 때문입니다.
+SORT_COLUMNS = {
+    "created_desc": ("created_at", True),
+    "end_date_asc": ("application_end_date", False),
+    "area_desc": ("area_sqm", True),
+    "area_asc": ("area_sqm", False),
+    "recruitment_desc": ("recruitment_count", True),
+    "recruitment_asc": ("recruitment_count", False),
+    "deposit_desc": ("deposit", True),
+    "deposit_asc": ("deposit", False),
+    "rent_desc": ("monthly_rent", True),
+    "rent_asc": ("monthly_rent", False),
+}
+
+
+def apply_sort(query, sort: str | None):
+    """고른 기준으로 정렬을 붙입니다.
+
+    값이 비어 있는 공고는 어떤 기준이든 맨 뒤로 보냅니다(nullsfirst=False).
+    같은 값끼리는 나중에 등록한 공고를 앞에 두어 순서가 흔들리지 않게 합니다.
+    """
+
+    column, desc = SORT_COLUMNS[sort]
+    return query.order(column, desc=desc, nullsfirst=False).order("id", desc=True)
+
+
+def is_known_sort(sort: str | None) -> bool:
+    """화면이 보낸 정렬 기준을 아는지 확인합니다."""
+
+    return sort in SORT_COLUMNS
+
 
 def listing_create(listing: ListingCreate) -> ListingPublic | None:
     supabase = get_supabase()
@@ -66,13 +101,18 @@ def listing_clear_image(listing_id: int) -> ListingPublic | None:
 
 
 def move_closed_to_end(
-    listings: list[ListingPublic], today: date | None = None
+    listings: list[ListingPublic],
+    today: date | None = None,
+    recent_closed_first: bool = True,
 ) -> list[ListingPublic]:
     """신청이 끝난 공고를 목록 맨 뒤로 보냅니다.
 
     아직 신청할 수 있는 공고를 먼저 보여 주려는 것입니다.
-    받은 목록은 이미 마감이 가까운 순으로 정렬돼 있다고 봅니다.
-    끝난 공고끼리는 최근에 끝난 것부터 놓습니다.
+    끝난 공고끼리의 순서는 무엇으로 정렬했는지에 따라 다릅니다.
+
+    마감일 순으로 받았다면 뒤집어야 최근에 끝난 것부터가 됩니다.
+    면적이나 보증금 순으로 받았다면 그 순서를 그대로 두어야 하므로,
+    그때는 recent_closed_first를 False로 넘깁니다.
     """
 
     if today is None:
@@ -88,34 +128,48 @@ def move_closed_to_end(
         else:
             still_open.append(listing)
 
-    # 들어온 순서가 마감일 오름차순이므로, 뒤집으면 최근에 끝난 것부터가 됩니다.
-    closed.reverse()
+    if recent_closed_first:
+        # 들어온 순서가 마감일 오름차순이므로, 뒤집으면 최근에 끝난 것부터가 됩니다.
+        closed.reverse()
     return still_open + closed
 
 
-def listing_get_all() -> list[ListingPublic]:
-    """마감이 가까운 순으로 돌려줍니다.
+def listing_get_all(sort: str | None = None) -> list[ListingPublic]:
+    """기본은 마감이 가까운 순으로 돌려줍니다.
 
     같은 날 마감이면 나중에 등록한 공고를 앞에 둡니다.
-    이미 신청이 끝난 공고는 맨 뒤로 보냅니다.
+    이미 신청이 끝난 공고는 어떤 기준으로 정렬하든 맨 뒤로 보냅니다.
     """
     supabase = get_supabase()
-    result = (
-        supabase.table("listings")
-        .select("*")
-        .order("application_end_date")
-        .order("created_at", desc=True)
-        .order("id", desc=True)
-        .execute()
-    )
+    query = supabase.table("listings").select("*")
+
+    # 마감일 순은 등록 시각까지 함께 보므로 따로 둡니다.
+    if sort is None or sort == "end_date_asc":
+        result = (
+            query.order("application_end_date")
+            .order("created_at", desc=True)
+            .order("id", desc=True)
+            .execute()
+        )
+        recent_closed_first = True
+    else:
+        result = apply_sort(query, sort).execute()
+        # 고른 기준의 순서를 흐트러뜨리지 않도록 끝난 공고도 그대로 둡니다.
+        recent_closed_first = False
+
     listings = [ListingPublic.model_validate(item) for item in result.data]
-    return move_closed_to_end(listings)
+    return move_closed_to_end(listings, recent_closed_first=recent_closed_first)
 
 
-def listing_get_page(page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> ListingPage:
-    """등록이 최신인 순서로 한 페이지 분량만 가져옵니다.
+def listing_get_page(
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    sort: str | None = None,
+) -> ListingPage:
+    """고른 기준으로 한 페이지 분량만 가져옵니다. 기본은 등록이 최신인 순서입니다.
 
     전체를 받아 와서 자르지 않고, Supabase에 정렬과 범위를 맡깁니다.
+    정렬을 서버에 맡겨야 페이지를 넘겨도 전체 기준의 순서가 이어집니다.
     """
 
     supabase = get_supabase()
@@ -150,11 +204,9 @@ def listing_get_page(page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> Listi
 
     # 등록 시각이 같은 공고가 있어도 순서가 흔들리지 않도록 id로 한 번 더 정렬합니다.
     start = (page - 1) * page_size
+    query = supabase.table("listings").select("*")
     result = (
-        supabase.table("listings")
-        .select("*")
-        .order("created_at", desc=True)
-        .order("id", desc=True)
+        apply_sort(query, sort or "created_desc")
         .range(start, start + page_size - 1)
         .execute()
     )
@@ -185,6 +237,7 @@ def listing_search(
     location: str | None,
     max_deposit: int | None,
     max_monthly_rent: int | None,
+    sort: str | None = None,
 ) -> list[ListingPublic]:
     supabase = get_supabase()
     query = supabase.table("listings").select("*")
@@ -196,15 +249,21 @@ def listing_search(
     if max_monthly_rent is not None:
         query = query.lte("monthly_rent", max_monthly_rent)
 
-    # 목록과 같은 기준입니다. 마감이 가까운 순, 같으면 등록이 최신인 순입니다.
-    result = (
-        query.order("application_end_date")
-        .order("created_at", desc=True)
-        .order("id", desc=True)
-        .execute()
-    )
+    # 목록과 같은 기준입니다. 기본은 마감이 가까운 순, 같으면 등록이 최신인 순입니다.
+    if sort is None or sort == "end_date_asc":
+        result = (
+            query.order("application_end_date")
+            .order("created_at", desc=True)
+            .order("id", desc=True)
+            .execute()
+        )
+        recent_closed_first = True
+    else:
+        result = apply_sort(query, sort).execute()
+        recent_closed_first = False
+
     listings = [ListingPublic.model_validate(item) for item in result.data]
-    return move_closed_to_end(listings)
+    return move_closed_to_end(listings, recent_closed_first=recent_closed_first)
 
 
 def listing_delete(listing_id: int) -> ListingPublic | None:
