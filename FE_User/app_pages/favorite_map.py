@@ -53,6 +53,7 @@ def render_favorite_map(favorites: list[dict], rest_api_key: str) -> None:
     failed_locations = []
 
     with st.spinner("즐겨찾기 위치를 찾는 중입니다..."):
+        
         for favorite in favorites:
             listing = favorite.get("listing") or {}
             location = (listing.get("location") or "").strip()
@@ -86,11 +87,7 @@ def render_favorite_map(favorites: list[dict], rest_api_key: str) -> None:
     map_data = pd.DataFrame(points)
     st.map(
         map_data,
-        latitude="latitude",
-        longitude="longitude",
-        color="#FFB000",
-        size=70,
-        height=560,
+        use_container_width=True,
     )
 
     if failed_locations:

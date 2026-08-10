@@ -50,6 +50,13 @@ try:
 
         with map_column:
             render_favorite_map(favorites, get_kakao_rest_api_key())
+            
 
 except BackendAPIError as error:
     st.error(str(error))
+
+response = supabase.table('favorites').select(
+    'id, user_id, listings(id, title, detail_address, latitude, longitude)'
+).execute()
+
+print(response.data)
