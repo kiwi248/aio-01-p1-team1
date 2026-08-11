@@ -30,6 +30,9 @@ HWPX_IMAGE_DIR = "BinData/"
 
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")
 
+# 백엔드 이미지 업로드 API가 받는 형식과 맞춥니다.
+UPLOAD_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
 
 def is_hwpx(filename: str) -> bool:
     return Path(filename or "").suffix.lower() == ".hwpx"
@@ -71,6 +74,34 @@ def _describe(data: bytes) -> tuple[int, int, str, str]:
         return 0, 0, "", ""
 
 
+def normalize_for_upload(data: bytes, name: str, mime_type: str) -> tuple[bytes, str, str]:
+    """백엔드가 받지 않는 그림을 JPEG 또는 PNG로 바꿉니다.
+
+    GIF는 움직이는 여러 장 중 첫 장만 공고 사진 후보로 사용하고 PNG로 저장합니다.
+    BMP 등 불투명 그림은 용량을 줄이기 위해 JPEG로 저장합니다. 투명도가 있으면
+    배경이 사라지지 않도록 PNG를 사용합니다.
+    """
+
+    if mime_type in UPLOAD_IMAGE_TYPES:
+        return data, name, mime_type
+
+    from PIL import Image
+
+    with Image.open(io.BytesIO(data)) as image:
+        image.seek(0)
+        output = io.BytesIO()
+        has_alpha = "A" in image.mode or "transparency" in image.info
+
+        if mime_type == "image/gif" or has_alpha:
+            converted = image.convert("RGBA" if has_alpha else "RGB")
+            converted.save(output, format="PNG", optimize=True)
+            return output.getvalue(), str(Path(name).with_suffix(".png")), "image/png"
+
+        converted = image.convert("RGB")
+        converted.save(output, format="JPEG", quality=90, optimize=True)
+        return output.getvalue(), str(Path(name).with_suffix(".jpg")), "image/jpeg"
+
+
 def extract_from_pdf(data: bytes) -> list[dict]:
     """PDF에서 사진을 꺼냅니다. 몇 쪽에서 나왔는지도 함께 남깁니다."""
 
@@ -91,9 +122,11 @@ def extract_from_pdf(data: bytes) -> list[dict]:
             width, height, mode, mime_type = _describe(raw)
             if not looks_like_photo(width, height, len(raw), mode):
                 continue
+            name = f"p{page_number:03d}_{order}{Path(item.name or '').suffix or '.png'}"
+            raw, name, mime_type = normalize_for_upload(raw, name, mime_type)
             found.append(
                 {
-                    "name": f"p{page_number:03d}_{order}{Path(item.name or '').suffix or '.png'}",
+                    "name": name,
                     "data": raw,
                     "width": width,
                     "height": height,
@@ -130,9 +163,14 @@ def extract_from_hwpx(data: bytes) -> list[dict]:
             width, height, mode, mime_type = _describe(raw)
             if not looks_like_photo(width, height, len(raw), mode):
                 continue
+            raw, upload_name, mime_type = normalize_for_upload(
+                raw,
+                Path(name).name,
+                mime_type,
+            )
             found.append(
                 {
-                    "name": Path(name).name,
+                    "name": upload_name,
                     "data": raw,
                     "width": width,
                     "height": height,

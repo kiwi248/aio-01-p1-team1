@@ -23,6 +23,7 @@ from core.document_images import (
     is_hwpx,
     is_pdf,
     looks_like_photo,
+    normalize_for_upload,
 )
 
 
@@ -53,6 +54,21 @@ def make_jpeg(width: int, height: int, color=(200, 120, 40)) -> bytes:
         for y in range(0, height, 3):
             pixels[x, y] = ((x * 7) % 256, (y * 11) % 256, (x + y) % 256)
     image.save(buffer, format="JPEG", quality=95)
+    return buffer.getvalue()
+
+
+def make_image(width: int, height: int, image_format: str) -> bytes:
+    """BMP와 GIF 변환 시험에 쓸 그림을 만듭니다."""
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    image = Image.new("RGB", (width, height), (200, 120, 40))
+    pixels = image.load()
+    for x in range(0, width, 3):
+        for y in range(0, height, 3):
+            pixels[x, y] = ((x * 7) % 256, (y * 11) % 256, (x + y) % 256)
+    image.save(buffer, format=image_format)
     return buffer.getvalue()
 
 
@@ -192,11 +208,43 @@ class ExtractFromHwpxTest(unittest.TestCase):
 
         self.assertEqual(extract_from_hwpx(data)[0]["mime_type"], "image/jpeg")
 
+    def test_BMP는_JPEG로_바꿔_돌려준다(self):
+        data = make_hwpx({"BinData/image1.bmp": make_image(800, 600, "BMP")})
+
+        image = extract_from_hwpx(data)[0]
+
+        self.assertEqual(image["name"], "image1.jpg")
+        self.assertEqual(image["mime_type"], "image/jpeg")
+        self.assertTrue(image["data"].startswith(b"\xff\xd8\xff"))
+
+    def test_GIF는_첫_프레임을_PNG로_바꿔_돌려준다(self):
+        data = make_hwpx({"BinData/image1.gif": make_image(800, 600, "GIF")})
+
+        image = extract_from_hwpx(data)[0]
+
+        self.assertEqual(image["name"], "image1.png")
+        self.assertEqual(image["mime_type"], "image/png")
+        self.assertTrue(image["data"].startswith(b"\x89PNG\r\n\x1a\n"))
+
     def test_확장자로_형식을_골라_꺼낸다(self):
         data = make_hwpx({"BinData/image1.png": make_png(800, 600)})
 
         self.assertEqual(len(extract_images(data, "공고.hwpx")), 1)
 
+
+class NormalizeForUploadTest(unittest.TestCase):
+    def test_백엔드가_받는_형식은_그대로_둔다(self):
+        original = make_png(800, 600)
+
+        data, name, mime_type = normalize_for_upload(
+            original,
+            "원본.png",
+            "image/png",
+        )
+
+        self.assertIs(data, original)
+        self.assertEqual(name, "원본.png")
+        self.assertEqual(mime_type, "image/png")
 
 if __name__ == "__main__":
     unittest.main()

@@ -49,7 +49,8 @@ class _UploadedImage:
         self.name = image["name"]
         self._data = image["data"]
         suffix = self.name.rsplit(".", 1)[-1].lower() if "." in self.name else "png"
-        self.type = "image/jpeg" if suffix in ("jpg", "jpeg") else f"image/{suffix}"
+        fallback_type = "image/jpeg" if suffix in ("jpg", "jpeg") else f"image/{suffix}"
+        self.type = image.get("mime_type") or fallback_type
 
     def getvalue(self) -> bytes:
         return self._data
