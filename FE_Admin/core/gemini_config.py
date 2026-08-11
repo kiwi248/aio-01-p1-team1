@@ -10,6 +10,8 @@ FE_Admin에는 원래 python-dotenv가 없어서, 필요한 만큼만 직접 읽
 import os
 from pathlib import Path
 
+import streamlit as st
+
 # 이 파일은 FE_Admin/core/gemini_config.py에 있습니다.
 ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
 
@@ -41,13 +43,25 @@ def read_env_file(path: Path = ENV_PATH) -> dict[str, str]:
 
 
 def get_setting(name: str, default: str = "") -> str:
-    """환경 변수를 먼저 보고, 없으면 .env에서 찾습니다."""
+    """환경 변수 -> 로컬 .env -> Streamlit Cloud secrets 순으로 찾습니다.
+
+    Streamlit Cloud에 배포하면 로컬 .env 파일이 없고 secrets는
+    st.secrets로만 노출되므로, 이 순서로 확인해야 배포 환경에서도
+    키를 찾을 수 있습니다.
+    """
 
     value = (os.getenv(name) or "").strip()
     if value:
         return value
 
-    return read_env_file().get(name, "").strip() or default
+    value = read_env_file().get(name, "").strip()
+    if value:
+        return value
+
+    try:
+        return str(st.secrets[name]).strip()
+    except Exception:
+        return default
 
 
 def get_api_key() -> str:
