@@ -6,6 +6,7 @@ import streamlit as st
 from clients.log_client import get_logs
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
+from core.timezone import to_kst_display
 from core.ui import page_header
 
 
@@ -32,8 +33,9 @@ def show_logs():
         return
 
     df = pd.DataFrame(logs)
+    df["time"] = df["time"].apply(to_kst_display)
 
-    st.caption(f"최근 {len(df)}건 (5초마다 자동 갱신)")
+    st.caption(f"최근 {len(df)}건 (5초마다 자동 갱신) · 시각은 한국시간(KST) 기준")
     st.dataframe(
         df.rename(
             columns={
