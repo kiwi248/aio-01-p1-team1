@@ -66,7 +66,8 @@ class FakeQuery:
         self.log.setdefault("select", []).append((columns, count))
         return self
 
-    def order(self, column, desc=False):
+    def order(self, column, desc=False, nullsfirst=None):
+        # nullsfirst는 값이 비어 있는 공고를 어디에 둘지 정합니다.
         self.log.setdefault("order", []).append((column, desc))
         return self
 
@@ -152,7 +153,11 @@ class ListingPageServiceTest(unittest.TestCase):
         # 3페이지는 21번째부터 30번째까지 (0부터 세면 20~29)
         self.assertEqual(log["range"], [(20, 29)])
         # 개수 조회 -> 목록 조회 순서로 두 번 호출합니다.
-        self.assertEqual(log["select"], [("id", "exact"), ("*", None)])
+        # 사진은 listing_images 테이블에 따로 있어 함께 읽어 옵니다.
+        self.assertEqual(
+            log["select"],
+            [("id", "exact"), ("*, listing_images(image_url, sort_order)", None)],
+        )
 
     def test_0건이어도_정상_응답한다(self):
         result, _ = run_page([])
@@ -223,7 +228,7 @@ class ListingPageApiTest(unittest.TestCase):
             response = client.get("/listings/page")
 
         self.assertEqual(response.status_code, 200)
-        fake.assert_called_once_with(page=1, page_size=10)
+        fake.assert_called_once_with(page=1, page_size=10, sort=None)
         body = response.json()["data"]
         self.assertEqual(body["page"], 1)
         self.assertEqual(body["page_size"], 10)
@@ -236,7 +241,7 @@ class ListingPageApiTest(unittest.TestCase):
             response = client.get("/listings/page", params={"page": 3, "page_size": 20})
 
         self.assertEqual(response.status_code, 200)
-        fake.assert_called_once_with(page=3, page_size=20)
+        fake.assert_called_once_with(page=3, page_size=20, sort=None)
 
     def test_잘못된_페이지_번호는_422로_막는다(self):
         response = client.get("/listings/page", params={"page": 0})

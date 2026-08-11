@@ -8,16 +8,35 @@ Local Storage가 아니라 Session Storage를 사용합니다. 비밀번호는 �
 """
 
 import streamlit as st
-from streamlit_session_browser_storage import SessionStorage
 
-from core.auth import init_state, is_logged_in, logout, restore_login
-from core.session_restore import ACCESS_TOKEN_NAME, REFRESH_TOKEN_NAME, STORAGE_KEY
-
-
+# set_page_config()는 이 앱에서 가장 먼저 실행되는 Streamlit 명령이어야 합니다.
+# 그래서 다른 import보다 위에 둡니다. 보통은 import를 파일 맨 위에 모으지만
+# 여기서는 순서가 곧 동작이라 예외로 둡니다.
+#
+# core.auth를 먼저 불러오면 core.api_client와 core.supabase_client가 딸려 오는데,
+# 그 모듈들은 읽히는 순간 st.secrets를 확인합니다.
+# 로컬에 secrets.toml이 없으면 Streamlit 버전에 따라 이때
+# "No secrets found" 안내를 화면에 그려 버립니다.
+# 그러면 아래 set_page_config()가 첫 번째 명령이 아니게 되어
+# StreamlitSetPageConfigMustBeFirstCommandError로 앱이 뜨지 않습니다.
 st.set_page_config(
     page_title="청약 정보 안내",
     page_icon="🏘️",
     layout="wide",
+)
+
+from streamlit_session_browser_storage import SessionStorage  # noqa: E402
+
+from core.auth import (  # noqa: E402
+    init_state,
+    is_logged_in,
+    logout,
+    restore_login,
+)
+from core.session_restore import (  # noqa: E402
+    ACCESS_TOKEN_NAME,
+    REFRESH_TOKEN_NAME,
+    STORAGE_KEY,
 )
 
 
@@ -25,14 +44,16 @@ home_page = st.Page("app_pages/02_home.py", title="홈", icon="🏠", default=Tr
 login_page = st.Page("app_pages/00_login.py", title="로그인", icon="🔐")
 signup_page = st.Page("app_pages/01_signup.py", title="회원가입", icon="📝")
 listings_page = st.Page("app_pages/03_listings.py", title="청약정보 조회", icon="📋")
+location_page = st.Page("app_pages/06_location.py",title="생활권 분석",icon="🚇")
 mypage_page = st.Page("app_pages/04_mypage.py", title="My Page", icon="⭐")
+favorite_page = st.Page("app_pages/05_favorite.py", title="즐겨찾기", icon="❤️")
 
 
 # 페이지는 로그인 여부와 상관없이 모두 등록합니다.
 # 로그인 상태에 따라 목록을 바꾸면, 새로고침 직후에는 아직 로그인 상태를 모르기 때문에
 # 지금 보고 있던 주소가 목록에서 빠져 "Page not found"가 뜰 수 있습니다.
 # 각 화면이 이미 로그인 여부를 스스로 확인하므로 등록은 항상 합니다.
-pages = [home_page, login_page, signup_page, listings_page, mypage_page]
+pages = [home_page, login_page, signup_page, listings_page,location_page, mypage_page, favorite_page]
 
 # 경로 등록을 먼저 합니다. 아래에서 잠시 멈추더라도 보고 있던 주소가 유지됩니다.
 navigation = st.navigation(pages, position="hidden")
@@ -84,8 +105,10 @@ with st.sidebar:
     st.title("메뉴")
     st.page_link(home_page)
     st.page_link(listings_page)
+    st.page_link(location_page)
 
     if is_logged_in():
+        st.page_link(favorite_page)
         st.page_link(mypage_page)
         st.divider()
         st.caption(f"{st.session_state.email} 님")
@@ -95,3 +118,4 @@ with st.sidebar:
 
 
 navigation.run()
+

@@ -9,5 +9,9 @@ def get_mypage_favorites(user_id: str):
     return request("GET", f"/favorites/mypage/{user_id}")
 
 
+def get_mypage_favorite_coordinates(user_id: str):
+    return request("GET", f"/favorites/mypage/{user_id}/coordinates")
+
+
 def delete_favorite(user_id: str, listing_id: int):
     return request("DELETE", f"/favorites/delete/{user_id}/{listing_id}")

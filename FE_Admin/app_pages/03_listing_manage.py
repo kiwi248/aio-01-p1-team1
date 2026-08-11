@@ -7,16 +7,39 @@ from streamlit.components.v1 import html as components_html
 
 from clients.listing_client import (
     delete_listing,
-    delete_listing_image,
     get_listing,
     get_listings_page,
+    replace_listing_images,
     search_listings,
     update_listing,
 )
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
 from core.constants import SEOUL_DISTRICTS
-from core.image_delete import should_show_delete_button, summarize_result
+from core.image_delete import summarize_result
+from core.image_gallery import (
+    MAX_IMAGE_COUNT,
+    check_upload,
+    count_label,
+    image_list,
+    rows_of,
+)
+from core.listing_view import (
+    address_line,
+    card_title,
+    description_preview,
+    description_lines,
+    format_description_line,
+    format_won,
+    period_line,
+    summary_line,
+)
+from core.listing_sort import (
+    DEFAULT_LABEL,
+    default_index,
+    sort_key,
+    sort_labels,
+)
 from core.page_params import (
     SEARCH_KEYS,
     build_params,
@@ -31,6 +54,9 @@ MAX_IMAGE_SIZE = 5 * 1024 * 1024
 
 # 한 페이지에 보여줄 공고 수입니다.
 PAGE_SIZE = 10
+
+# 고른 정렬 기준을 담아 둘 자리입니다.
+SORT_STATE_KEY = "admin-listing-sort"
 
 st.title("청약정보 조회 / 삭제")
 
@@ -110,44 +136,109 @@ def close_edit() -> None:
     st.rerun()
 
 
-@st.dialog("이미지 삭제 확인")
-def confirm_image_delete(listing_id: int) -> None:
-    """이미지를 지우기 전에 한 번 더 묻는 경고창입니다.
+@st.dialog("사진 삭제 확인")
+def confirm_one_image_delete(listing_id: int, images: list[str], target: str) -> None:
+    """사진 한 장을 지우기 전에 한 번 더 묻는 경고창입니다.
 
-    여기서 삭제를 고르기 전까지는 서버에 아무것도 보내지 않습니다.
+    남길 사진 목록을 서버에 보내는 방식이라, 여기서 삭제를 고르기 전까지는
+    아무것도 보내지 않습니다.
     """
 
-    st.write("현재 등록된 이미지를 삭제하시겠습니까?")
-    st.warning("삭제된 이미지는 복구할 수 없습니다.")
-    st.caption("공고의 다른 수정 내용은 저장되지 않으며 현재 이미지만 삭제됩니다.")
+    st.image(target, width=240)
+    st.write("이 사진을 삭제하시겠습니까?")
+    st.warning("삭제된 사진은 복구할 수 없습니다.")
+    st.caption("공고의 다른 수정 내용은 저장되지 않으며 이 사진만 삭제됩니다.")
 
     cancel_column, delete_column = st.columns(2)
 
     with cancel_column:
-        if st.button("취소", use_container_width=True, key="image-delete-cancel"):
-            # 아무것도 보내지 않고 경고창만 닫습니다.
+        if st.button("취소", use_container_width=True, key="one-image-cancel"):
             st.rerun()
 
     with delete_column:
         if st.button(
-            "삭제", type="primary", use_container_width=True, key="image-delete-confirm"
+            "삭제", type="primary", use_container_width=True, key="one-image-confirm"
         ):
-            # 공고 id만 보냅니다. 수정 폼에 입력해 둔 값은 함께 가지 않습니다.
+            kept = [url for url in images if url != target]
             try:
-                response = delete_listing_image(listing_id)
+                response = replace_listing_images(listing_id, kept, [])
             except BackendAPIError as error:
                 st.error(str(error))
                 return
 
             succeeded, message = summarize_result(response)
             if not succeeded:
-                # 경고창을 닫지 않고 원인을 보여 줍니다.
                 st.error(message)
                 return
 
-            # 다시 그리면 공고를 새로 읽어 와 이미지 없음 상태가 됩니다.
             st.session_state.image_delete_message = message
             st.rerun()
+
+
+def show_listing_images(listing_id: int, listing: dict) -> None:
+    """공고 사진을 보여 주고 더하거나 지웁니다.
+
+    아래 수정 폼과 따로 둡니다. 사진을 정리할 때 폼에 입력만 해 두고
+    아직 저장하지 않은 제목·금액 같은 값이 함께 저장되지 않게 하려는 것입니다.
+    """
+
+    images = image_list(listing)
+
+    st.caption(f"현재 사진  ·  {count_label(images) or '없음'}")
+
+    if images:
+        for row in rows_of(images):
+            columns = st.columns(len(row))
+            for column, url in zip(columns, row):
+                column.image(url, use_container_width=True)
+                # 맨 앞 사진이 목록 카드에 보이는 대표 이미지입니다.
+                if url == images[0]:
+                    column.caption("대표 이미지")
+                if column.button(
+                    "삭제",
+                    use_container_width=True,
+                    key=f"image-remove-{listing_id}-{images.index(url)}",
+                ):
+                    confirm_one_image_delete(listing_id, images, url)
+    else:
+        st.caption("등록된 사진이 없습니다.")
+
+    remaining = MAX_IMAGE_COUNT - len(images)
+    if remaining <= 0:
+        st.info(f"사진은 최대 {MAX_IMAGE_COUNT}장까지입니다. 더 넣으려면 먼저 지워 주세요.")
+        return
+
+    new_files = st.file_uploader(
+        f"사진 추가 (최대 {remaining}장 더)",
+        type=["jpg", "jpeg", "png", "webp"],
+        accept_multiple_files=True,
+        key=f"edit-image-add-{listing_id}",
+    )
+    new_files = new_files or []
+
+    problem = check_upload(new_files, already=len(images))
+    if problem:
+        st.error(problem)
+
+    if st.button(
+        "사진 저장",
+        disabled=not new_files or bool(problem),
+        key=f"image-add-save-{listing_id}",
+    ):
+        try:
+            with st.spinner(f"사진 {len(new_files)}장을 업로드하는 중..."):
+                response = replace_listing_images(listing_id, images, new_files)
+        except BackendAPIError as error:
+            st.error(str(error))
+            return
+
+        succeeded, message = summarize_result(response)
+        if not succeeded:
+            st.error(message)
+            return
+
+        st.session_state.image_delete_message = message
+        st.rerun()
 
 
 def show_listing_list() -> None:
@@ -176,7 +267,19 @@ def show_listing_list() -> None:
                 step=10000,
                 value=int(current_search.get("max_monthly_rent", 0)),
             )
+            st.selectbox(
+                "정렬 기준",
+                sort_labels(),
+                index=default_index(),
+                key=SORT_STATE_KEY,
+                help="검색을 누르면 고른 순서로 다시 정렬합니다.",
+            )
             search_submitted = st.form_submit_button("검색")
+
+    # 고른 정렬 기준은 st.session_state에 남습니다.
+    # 페이지를 넘기거나 수정 화면에 다녀와도 순서가 유지됩니다.
+    current_sort_label = st.session_state.get(SORT_STATE_KEY, DEFAULT_LABEL)
+    current_sort = sort_key(current_sort_label)
 
     if search_submitted:
         # 검색 조건을 주소창에 적어 두고 다시 그립니다.
@@ -200,6 +303,7 @@ def show_listing_list() -> None:
         for name in ("max_deposit", "max_monthly_rent"):
             if name in current_search:
                 params[name] = int(current_search[name])
+        params["sort"] = current_sort
         with st.spinner("검색 중..."):
             response = search_listings(params)
 
@@ -207,11 +311,11 @@ def show_listing_list() -> None:
         if not listings:
             st.info("조회된 청약정보가 없습니다.")
             return
-        st.caption(f"검색 결과 {len(listings)}건")
+        st.caption(f"검색 결과 {len(listings)}건 ({current_sort_label})")
         page = total_pages = total_count = None
     else:
         with st.spinner("불러오는 중..."):
-            response = get_listings_page(current_page, PAGE_SIZE)
+            response = get_listings_page(current_page, PAGE_SIZE, current_sort)
 
         page_data = response.get("data") or {}
         listings = page_data.get("items") or []
@@ -232,54 +336,101 @@ def show_listing_list() -> None:
             st.info("조회된 청약정보가 없습니다.")
             return
 
-        st.caption(f"총 {total_count}건  |  {page} / {total_pages} 페이지")
+        st.caption(
+            f"총 {total_count}건  |  {page} / {total_pages} 페이지 ({current_sort_label})"
+        )
 
     for listing in listings:
         with st.container(border=True):
-            st.subheader(listing.get("title") or "제목 없음")
-            if listing.get("image_url"):
-                st.image(listing["image_url"], width=300)
-            st.write(
-                f"주택명: {listing.get('housing_name') or '-'}  |  "
-                f"자치구: {listing.get('location') or '-'}"
-            )
-            st.write(
-                f"면적: {listing.get('area_sqm') or '-'}㎡  |  "
-                f"모집 인원: {listing.get('recruitment_count') or '-'}명"
-            )
-            st.write(
-                f"보증금: {int(listing.get('deposit') or 0):,}원  |  "
-                f"월세: {int(listing.get('monthly_rent') or 0):,}원"
-            )
-            st.caption(
-                f"신청 시작일: {listing.get('application_start_date') or '-'}  |  "
-                f"신청 종료일: {listing.get('application_end_date') or '-'}"
-            )
-            if listing.get("description"):
-                st.write(listing["description"])
+            # 같은 공고 안에 주택형이 여러 개라 공고명이 전부 같습니다.
+            # 주택명을 앞세우고 공고명은 작게 둡니다.
+            text_column, image_column = st.columns([3, 1], vertical_alignment="top")
 
-            if listing.get("source_url"):
-                st.link_button("공고 원문 보기", listing["source_url"])
+            with text_column:
+                st.markdown(f"#### {card_title(listing)}")
+                st.caption(f"#{listing['id']}  ·  {listing.get('title') or ''}")
 
-            # 수정 버튼을 누르면 이 공고 하나만 수정 화면으로 보여줍니다.
-            if st.button("수정", key=f"edit-listing-{listing['id']}"):
-                open_edit(listing["id"])
+                summary = summary_line(listing)
+                if summary:
+                    st.write(summary)
 
-            delete_confirmed = st.checkbox(
-                "삭제한 청약정보는 복구할 수 없습니다. 삭제에 동의합니다.",
-                key=f"delete-confirm-{listing['id']}",
-            )
-            if st.button(
-                "삭제",
-                type="primary",
-                disabled=not delete_confirmed,
-                key=f"delete-listing-{listing['id']}",
-            ):
-                result = delete_listing(listing["id"])
-                st.session_state.listing_message = result.get(
-                    "message", "청약정보를 삭제했습니다."
+                address = address_line(listing)
+                if address:
+                    st.write(address)
+
+            with image_column:
+                if listing.get("image_url"):
+                    st.image(listing["image_url"], use_container_width=True)
+
+            # 금액은 가장 먼저 확인하는 값이라 나란히 크게 둡니다.
+            deposit_column, rent_column = st.columns(2)
+            deposit_column.caption("보증금")
+            deposit_column.markdown(f"**{format_won(listing.get('deposit'))}**")
+            rent_column.caption("월세")
+            rent_column.markdown(f"**{format_won(listing.get('monthly_rent'))}**")
+
+            st.caption(period_line(listing))
+
+            # 설명이 길어 목록이 늘어지므로 첫 줄만 보여 주고 접어 둡니다.
+            # 사진도 여기 안에 둡니다. 카드마다 사진을 여러 장 펼쳐 놓으면
+            # 목록이 사진으로 뒤덮여 오히려 훑기 어려워집니다.
+            preview = description_preview(listing)
+            images = image_list(listing)
+            summary = preview or count_label(images)
+
+            if summary:
+                with st.expander(f"상세 정보  ·  {summary}"):
+                    if images:
+                        st.caption(count_label(images))
+                        # 스무 장까지 올 수 있어 한 줄에 넷씩 끊어 놓습니다.
+                        for row in rows_of(images):
+                            columns = st.columns(len(row))
+                            for column, url in zip(columns, row):
+                                column.image(url, use_container_width=True)
+                        st.divider()
+
+                    # 줄바꿈 하나는 마크다운에서 공백이 되어 항목이 한 줄로 붙습니다.
+                    # 줄마다 따로 그려 항목이 구분되게 합니다.
+                    for line in description_lines(listing):
+                        st.markdown(format_description_line(line))
+
+            link_column, edit_column = st.columns(2)
+
+            with link_column:
+                if listing.get("source_url"):
+                    st.link_button(
+                        "공고 원문 보기",
+                        listing["source_url"],
+                        use_container_width=True,
+                    )
+
+            with edit_column:
+                # 수정 버튼을 누르면 이 공고 하나만 수정 화면으로 보여줍니다.
+                if st.button(
+                    "수정",
+                    use_container_width=True,
+                    key=f"edit-listing-{listing['id']}",
+                ):
+                    open_edit(listing["id"])
+
+            with st.expander("이 공고 삭제"):
+                st.warning("삭제한 청약정보는 복구할 수 없습니다.")
+                delete_confirmed = st.checkbox(
+                    "삭제에 동의합니다.",
+                    key=f"delete-confirm-{listing['id']}",
                 )
-                st.rerun()
+                if st.button(
+                    "삭제",
+                    type="primary",
+                    disabled=not delete_confirmed,
+                    use_container_width=True,
+                    key=f"delete-listing-{listing['id']}",
+                ):
+                    result = delete_listing(listing["id"])
+                    st.session_state.listing_message = result.get(
+                        "message", "청약정보를 삭제했습니다."
+                    )
+                    st.rerun()
 
     # 검색 결과일 때는 페이지 이동 버튼을 두지 않습니다.
     if total_pages is None:
@@ -366,15 +517,12 @@ def show_listing_edit(listing_id: int) -> None:
     if message := st.session_state.pop("image_delete_message", None):
         st.success(message)
 
-    if should_show_delete_button(listing.get("image_url")):
-        st.caption("현재 이미지")
-        st.image(listing["image_url"], width=300)
+    # 사진은 아래 수정 폼과 따로 다룹니다.
+    # 사진을 만져도 폼에 입력해 둔 값은 그대로 남고,
+    # 폼을 저장해도 사진은 건드리지 않습니다.
+    show_listing_images(listing_id, listing)
 
-        # 누르면 경고창만 뜹니다. 이 버튼만으로는 아무것도 지워지지 않습니다.
-        if st.button("현재 이미지 삭제", key=f"image-delete-open-{listing_id}"):
-            confirm_image_delete(listing_id)
-    else:
-        st.caption("등록된 이미지가 없습니다.")
+    st.divider()
 
     with st.form("listing_edit_form"):
         title = st.text_input("공고 제목", value=listing.get("title") or "", key=f"edit-title-{listing_id}")
@@ -400,6 +548,12 @@ def show_listing_edit(listing_id: int) -> None:
             index=location_index,
             placeholder="자치구를 선택해 주세요",
             key=f"edit-location-{listing_id}",
+        )
+        detail_address = st.text_input(
+            "상세주소 (선택)",
+            value=listing.get("detail_address") or "",
+            placeholder="예: 서울 강남구 도곡로 464",
+            key=f"edit-detail-address-{listing_id}",
         )
         deposit = st.number_input(
             "보증금",
@@ -482,6 +636,7 @@ def show_listing_edit(listing_id: int) -> None:
         "area_sqm": str(area_sqm),
         "recruitment_count": str(int(recruitment_count)),
         "location": location,
+        "detail_address": detail_address.strip(),
         "deposit": str(int(deposit)),
         "monthly_rent": str(int(monthly_rent)),
         "application_start_date": application_start_date.isoformat(),

@@ -5,6 +5,8 @@ from app.core.api_response import ApiResponse
 from app.services.listing_service import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
+    SORT_COLUMNS,
+    is_known_sort,
     listing_get,
     listing_get_all,
     listing_get_page,
@@ -14,12 +16,28 @@ from app.services.listing_service import (
 listing_router = APIRouter(prefix="/listings", tags=["Listing"])
 
 # 200: 정상 - 정상 실행 되면 자동 전송
+# 400: 모르는 정렬 기준
 # 404: 데이터 없음
+
+
+def check_sort(sort: str | None) -> str | None:
+    """모르는 정렬 기준이 들어오면 조용히 넘기지 않고 알려 줍니다.
+
+    잘못 적은 이름을 그냥 무시하면 왜 순서가 안 바뀌는지 알기 어렵습니다.
+    """
+
+    if sort is None or is_known_sort(sort):
+        return sort
+    raise HTTPException(
+        status_code=400,
+        detail=f"정렬 기준 '{sort}'을(를) 알 수 없습니다. 가능한 값: {', '.join(SORT_COLUMNS)}",
+    )
+
 
 # 1. 전체 조회
 @listing_router.get("/getall")
-def get_all() -> ApiResponse:
-    listings = listing_get_all()
+def get_all(sort: str | None = Query(default=None)) -> ApiResponse:
+    listings = listing_get_all(sort=check_sort(sort))
     return ApiResponse(
         success=True,
         message="청약정보 목록을 조회했습니다.",
@@ -34,8 +52,11 @@ def get_all() -> ApiResponse:
 def get_page(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    sort: str | None = Query(default=None),
 ) -> ApiResponse:
-    listing_page = listing_get_page(page=page, page_size=page_size)
+    listing_page = listing_get_page(
+        page=page, page_size=page_size, sort=check_sort(sort)
+    )
     return ApiResponse(
         success=True,
         message="청약정보 목록을 조회했습니다.",
@@ -49,11 +70,13 @@ def search(
     location: str | None = Query(default=None),
     max_deposit: int | None = Query(default=None, ge=0),
     max_monthly_rent: int | None = Query(default=None, ge=0),
+    sort: str | None = Query(default=None),
 ) -> ApiResponse:
     listings = listing_search(
         location=location,
         max_deposit=max_deposit,
         max_monthly_rent=max_monthly_rent,
+        sort=check_sort(sort),
     )
     return ApiResponse(
         success=True,
