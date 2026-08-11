@@ -5,3 +5,5 @@ streamlit-browser-session-storage==0.0.12
 google-genai>=1.0,<2
 # 공고 PDF에서 글자와 사진을 꺼낼 때 씁니다. HWPX는 표준 zipfile로 읽습니다.
 pypdf>=6,<7
+# 추출한 이미지의 크기·색상 형식을 확인하고 테스트 이미지를 만들 때 씁니다.
+Pillow>=11,<13
