@@ -25,6 +25,8 @@ from core.image_matching import one_house_only, suggest_matches
 from core.listing_extract import (
     FIXABLE_DATE_FIELDS,
     FIXABLE_NUMBER_FIELDS,
+    SHARED_TEXT_FIELDS,
+    missing_shared_fields,
     summarize,
     unreadable_fields,
     validate_all,
@@ -108,6 +110,7 @@ if st.button("공고에서 청약정보 뽑아내기", type="primary", disabled=
             st.session_state.auto_images = found_images
             st.session_state.auto_image_labels = image_labels_found
             st.session_state.auto_fixes = {}
+            st.session_state.auto_shared = {}
             # 파일을 새로 올리면 이전에 고른 사진 선택은 지웁니다.
             for key in [k for k in st.session_state if str(k).startswith("auto-img-")]:
                 del st.session_state[key]
@@ -129,6 +132,16 @@ for index, item in enumerate(extracted):
         merged.update(fixes[index])
     patched.append(merged)
 
+# 공고 전체에 하나뿐인 값은 여기서 한 번만 받습니다.
+# 원문 주소가 문서에 없는 공고가 있어, 건마다 넣게 하면 번거롭습니다.
+shared = st.session_state.get("auto_shared") or {}
+if shared:
+    for merged in patched:
+        if isinstance(merged, dict):
+            for field, value in shared.items():
+                if value:
+                    merged[field] = value
+
 results = validate_all(patched, SEOUL_DISTRICTS)
 counts = summarize(results)
 
@@ -145,6 +158,29 @@ if counts["blocked"]:
         "공고문 표에서 칸이 병합되어 있으면 값을 읽지 못하는 일이 있습니다. "
         "아래에서 그 값을 직접 채우면 함께 등록할 수 있습니다."
     )
+
+missing_shared = missing_shared_fields(patched)
+if missing_shared:
+    with st.container(border=True):
+        st.markdown("**공고 전체에 넣을 값**")
+        st.caption(
+            "문서에서 찾지 못한 값입니다. 한 번만 넣으면 모든 건에 함께 들어갑니다."
+        )
+        entered_shared = {}
+        for field, title in SHARED_TEXT_FIELDS:
+            if field not in missing_shared:
+                continue
+            entered_shared[field] = st.text_input(
+                title,
+                placeholder="예: https://www.geumcheon.go.kr/...",
+                key=f"auto-shared-{field}",
+            )
+
+        if st.button("모든 건에 적용", key="auto-shared-apply"):
+            saved = dict(st.session_state.get("auto_shared") or {})
+            saved.update({k: v.strip() for k, v in entered_shared.items()})
+            st.session_state.auto_shared = saved
+            st.rerun()
 
 found_images = st.session_state.get("auto_images") or []
 

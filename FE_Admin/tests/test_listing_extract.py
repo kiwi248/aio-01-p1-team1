@@ -8,7 +8,7 @@ Gemini나 서버에 연결하지 않고, 모델이 돌려줄 법한 값만 흉�
 import unittest
 
 from core.constants import SEOUL_DISTRICTS
-from core.listing_extract import unreadable_fields, summarize, validate_all, validate_extracted
+from core.listing_extract import missing_shared_fields, unreadable_fields, summarize, validate_all, validate_extracted
 
 
 def good_item(**overrides) -> dict:
@@ -197,6 +197,32 @@ class UnreadableFieldsTest(unittest.TestCase):
     def test_이상한_값도_안전하다(self):
         self.assertEqual(unreadable_fields(None), [])
         self.assertEqual(unreadable_fields("문자열"), [])
+
+
+
+class MissingSharedFieldsTest(unittest.TestCase):
+    """공고 하나에 하나뿐인 값은 한 번만 받습니다."""
+
+    def test_한_건이라도_있으면_비어_있지_않다(self):
+        items = [good_item(source_url=""), good_item()]
+
+        self.assertEqual(missing_shared_fields(items), [])
+
+    def test_전부_비어_있으면_알려_준다(self):
+        """금천구 공고처럼 문서에 원문 주소가 없는 경우입니다."""
+        items = [good_item(source_url=""), good_item(source_url=None)]
+
+        self.assertEqual(missing_shared_fields(items), ["source_url"])
+
+    def test_공백만_있어도_비어_있는_것으로_본다(self):
+        self.assertEqual(missing_shared_fields([good_item(source_url="   ")]), ["source_url"])
+
+    def test_빈_목록도_안전하다(self):
+        self.assertEqual(missing_shared_fields([]), ["source_url"])
+        self.assertEqual(missing_shared_fields(None), ["source_url"])
+
+    def test_이상한_값이_섞여도_안전하다(self):
+        self.assertEqual(missing_shared_fields(["문자열", None]), ["source_url"])
 
 
 if __name__ == "__main__":

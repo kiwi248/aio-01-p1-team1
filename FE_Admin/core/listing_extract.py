@@ -137,6 +137,27 @@ FIXABLE_DATE_FIELDS = (
     ("application_end_date", "신청 종료일"),
 )
 
+# 공고 전체에 한 번만 넣으면 되는 값입니다.
+# 원문 주소는 공고 하나에 하나뿐이라, 건마다 따로 넣게 하면 번거롭습니다.
+SHARED_TEXT_FIELDS = (("source_url", "공고 원문 URL"),)
+
+
+def missing_shared_fields(items: object) -> list[str]:
+    """공고 전체에서 비어 있는 공통 항목을 알려 줍니다.
+
+    금천구 공고처럼 문서 안에 원문 주소가 적혀 있지 않은 경우가 있습니다.
+    그때는 관리자가 공고 페이지 주소를 한 번만 넣으면 됩니다.
+    """
+
+    bad: list[str] = []
+    for field, _ in SHARED_TEXT_FIELDS:
+        for item in items or []:
+            if isinstance(item, dict) and _clean_text(item.get(field)):
+                break
+        else:
+            bad.append(field)
+    return bad
+
 
 def unreadable_fields(item: object) -> list[str]:
     """모델이 뽑은 값 중 숫자나 날짜로 읽을 수 없는 항목의 이름을 돌려줍니다.

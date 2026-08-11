@@ -54,6 +54,12 @@ def describe_call_error(error: Exception, api_key: str = "") -> str:
             f"모델 '{get_model_name()}'을(를) 찾을 수 없습니다. "
             "FE_Admin/.env의 GEMINI_MODEL을 확인해 주세요."
         )
+    if "400" in text or "INVALID_ARGUMENT" in text:
+        return (
+            "Gemini가 이 파일을 읽지 못했습니다. "
+            "PDF 또는 HWPX 파일인지, 파일이 깨지지 않았는지 확인해 주세요. "
+            "다시 눌러도 같은 결과가 나옵니다."
+        )
 
     return f"Gemini 호출에 실패했습니다. ({type(error).__name__})"
 
@@ -146,7 +152,27 @@ def extract_listings_from_pdf(pdf_bytes: bytes, filename: str = "notice.pdf") ->
         ) from error
 
     client = genai.Client(api_key=api_key)
-    part = types.Part.from_bytes(data=pdf_bytes, mime_type=guess_mime_type(filename))
+
+    # 파일 형식에 따라 보내는 방법이 다릅니다.
+    #   PDF  - 파일을 그대로 보냅니다. 표 모양까지 함께 보아 더 정확하고,
+    #          토큰도 적게 듭니다(재 보니 PDF 28,001 / 글자만 40,226).
+    #   HWPX - Gemini가 모르는 형식이라 그대로 보내면 400으로 거절합니다.
+    #          글자를 먼저 꺼내 글로 보냅니다.
+    from core.document_images import is_hwpx
+    from core.document_text import extract_text
+
+    if is_hwpx(filename):
+        try:
+            text = extract_text(pdf_bytes, filename)
+        except Exception as error:
+            raise GeminiError(
+                f"HWPX 파일에서 글자를 꺼내지 못했습니다. ({type(error).__name__})"
+            ) from error
+        if not text.strip():
+            raise GeminiError("HWPX 파일에서 읽을 수 있는 글자를 찾지 못했습니다.")
+        part = f"아래는 공고문 전체 글입니다.\n\n{text}"
+    else:
+        part = types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")
 
     last_error: Exception | None = None
 
@@ -253,14 +279,6 @@ def identify_images(images: list) -> list[dict]:
     return result
 
 
-def guess_mime_type(filename: str) -> str:
-    """파일 이름을 보고 Gemini에 알려 줄 형식을 정합니다.
-
-    HWPX는 Gemini가 아는 형식이 아니라 PDF처럼 통째로 보낼 수 없습니다.
-    HWPX를 다룰 때는 글자를 먼저 꺼내 보내므로 여기서는 PDF만 씁니다.
-    """
-
-    return "application/pdf"
 
 
 def parse_extract_response(text: str) -> list:
