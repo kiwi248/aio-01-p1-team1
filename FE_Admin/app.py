@@ -33,7 +33,12 @@ from core.auth import init_state, is_logged_in, logout  # noqa: E402
 
 home_page = st.Page("app_pages/01_home.py", title="홈", icon="🏠", default=True)
 login_page = st.Page("app_pages/00_login.py", title="로그인", icon="🔐")
-listing_create_page = st.Page("app_pages/02_listing_create.py", title="청약정보 등록", icon="📝")
+listing_create_page = st.Page(
+    "app_pages/02_listing_create.py", title="청약정보 등록(수동)", icon="📝"
+)
+listing_auto_create_page = st.Page(
+    "app_pages/08_listing_auto_create.py", title="청약정보 등록(자동)", icon="🤖"
+)
 listing_manage_page = st.Page("app_pages/03_listing_manage.py", title="청약정보 조회/삭제", icon="📋")
 favorite_ranking_page = st.Page("app_pages/04_favorite_ranking.py", title="즐겨찾기 순위", icon="⭐")
 favorite_detail_page = st.Page("app_pages/05_favorite_detail.py", title="즐겨찾기 상세", icon="🔍")
@@ -50,6 +55,7 @@ pages = [
     home_page,
     login_page,
     listing_create_page,
+    listing_auto_create_page,
     listing_manage_page,
     favorite_ranking_page,
     favorite_detail_page,
@@ -108,6 +114,7 @@ with st.sidebar:
 
     if is_logged_in():
         st.page_link(listing_create_page)
+        st.page_link(listing_auto_create_page)
 
         # 조회 화면은 보고 있던 페이지와 수정 중인 공고를 주소창에 담아 둡니다.
         # query_params를 주면 메뉴를 누를 때 그 값으로 주소가 정리되므로,
