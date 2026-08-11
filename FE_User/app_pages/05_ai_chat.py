@@ -12,6 +12,7 @@ from clients.chat_client import (
     send_chat_message,
 )
 from core.auth import is_logged_in
+from core.ui import page_header
 
 
 MESSAGE_KEY = "ai_chat_messages"
@@ -133,7 +134,7 @@ def show_saved_summaries() -> None:
             )
 
 
-st.title("🤖 AI 채팅 상담")
+page_header("💬", "AI 채팅 상담", "청약 자격이나 신청 방법을 편하게 물어보세요.")
 
 if not is_logged_in():
     st.warning("AI 채팅 상담을 이용하려면 로그인이 필요합니다.")

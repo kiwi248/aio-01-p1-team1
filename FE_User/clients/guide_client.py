@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import httpx
+
+from core.api_client import BACKEND_URL
 
 
 GUIDE_REQUEST_TIMEOUT = 45.0
@@ -16,7 +17,7 @@ class GuideAPIError(Exception):
 
 
 def get_guide_backend_url() -> str:
-    return os.getenv("GUIDE_BACKEND_URL", "http://127.0.0.1:8010").rstrip("/")
+    return BACKEND_URL
 
 
 def _request(

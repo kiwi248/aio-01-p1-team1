@@ -34,9 +34,10 @@ from core.pagination import (
     slice_page,
     total_pages,
 )
+from core.ui import page_header
 
 
-st.title("청약정보 조회")
+page_header("📋", "청약정보 조회", "조건을 검색해서 원하는 공고를 찾아보세요.")
 
 if message := st.session_state.pop("listing_message", None):
     st.success(message)

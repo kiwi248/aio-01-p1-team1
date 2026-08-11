@@ -7,6 +7,7 @@ import streamlit as st
 from app_pages._guide_view import format_answer
 from clients.guide_client import GuideAPIError, get_guide_profile, send_guide_message
 from core.auth import is_logged_in
+from core.ui import page_header
 
 
 MESSAGE_KEY = "ai_guide_messages"
@@ -51,7 +52,7 @@ def clear_guide_chat() -> None:
     st.session_state[MESSAGE_KEY] = []
 
 
-st.title("🧭 AI 안내원")
+page_header("🤖", "AI 안내원", "사이트 이용 방법과 간단한 청약 용어를 안내해 드려요.")
 
 if not is_logged_in():
     st.warning("AI 안내원을 이용하려면 로그인이 필요합니다.")

@@ -6,10 +6,10 @@ import streamlit as st
 from clients.log_client import get_log_history
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
+from core.ui import page_header
 
 
-st.title("로그 이력 조회")
-st.caption("Supabase에 저장된 warning/error 로그를 조회합니다. (info는 DB에 저장하지 않습니다)")
+page_header("🗂️", "로그 이력 조회", "Supabase에 저장된 warning/error 로그를 조회합니다. (info는 DB에 저장하지 않습니다)")
 
 if not is_logged_in():
     st.warning("로그인이 필요합니다.")

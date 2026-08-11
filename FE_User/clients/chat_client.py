@@ -1,11 +1,12 @@
-"""별도 테스트 백엔드와 통신하는 AI 상담 전용 클라이언트입니다."""
+"""AI 상담 전용 클라이언트입니다."""
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import httpx
+
+from core.api_client import BACKEND_URL
 
 
 CHAT_REQUEST_TIMEOUT = 45.0
@@ -16,7 +17,7 @@ class ChatAPIError(Exception):
 
 
 def get_chat_backend_url() -> str:
-    return os.getenv("CHAT_BACKEND_URL", "http://127.0.0.1:8010").rstrip("/")
+    return BACKEND_URL
 
 
 def _request(

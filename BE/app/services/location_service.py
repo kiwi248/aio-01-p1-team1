@@ -152,7 +152,7 @@ def make_geocode_result(
 
 
 def geocode_address(address: str) -> GeocodeResult:
-    """주소를 먼저 검색하고, 실패하면 장소명으로 검색합니다."""
+    """Kakao에서 주소를 좌표로 변환하고, 실패하면 장소명으로 재검색합니다."""
 
     address = address.strip()
 
@@ -201,7 +201,7 @@ def geocode_address(address: str) -> GeocodeResult:
 
 
 def estimate_walking_minutes(distance_m: int) -> int:
-    """직선거리를 보정해 대략적인 도보시간을 계산합니다."""
+    """직선거리에 경로 보정값과 평균 보행속도를 적용해 도보시간을 추정합니다."""
 
     route_factor = 1.25
     walking_speed_m_per_minute = 75
@@ -254,7 +254,7 @@ def find_nearby_facilities(
     radius_m: int = 2000,
     limit: int = 3,
 ) -> list[NearbyFacility]:
-    """주어진 좌표 주변에서 지정한 종류의 시설을 검색합니다."""
+    """Kakao 카테고리 코드로 좌표 주변 시설을 검색해 거리순으로 반환합니다."""
 
     validate_search_options(
         latitude=latitude,
@@ -341,7 +341,7 @@ def find_nearby_living_facilities(
     radius_m: int = 2000,
     limit: int = 3,
 ) -> NearbyFacilities:
-    """주변 지하철역·마트·병원을 시설 종류별로 조회합니다."""
+    """동일한 좌표와 반경으로 지하철역·마트·병원을 각각 조회합니다."""
 
     return NearbyFacilities(
         subways=find_nearby_facilities(

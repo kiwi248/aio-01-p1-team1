@@ -6,10 +6,10 @@ import streamlit as st
 from clients.log_client import get_logs
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
+from core.ui import page_header
 
 
-st.title("실시간 로그 대시보드")
-st.caption("서비스 로그를 5초마다 자동으로 새로고침해서 보여줍니다.")
+page_header("📊", "실시간 로그 대시보드", "서비스 로그를 5초마다 자동으로 새로고침해서 보여줍니다.")
 
 if not is_logged_in():
     st.warning("로그인이 필요합니다.")

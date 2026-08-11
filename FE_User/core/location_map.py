@@ -165,7 +165,7 @@ def build_location_deck(
     hospitals: list[dict],
     radius_m: int,
 ) -> pdk.Deck:
-    """공고와 주변 시설을 표시하는 PyDeck 지도를 만듭니다."""
+    """공고·시설 아이콘과 연결선, 거리 문구를 포함한 PyDeck 지도를 만듭니다."""
 
     listing_point = make_listing_point(
         title=title,

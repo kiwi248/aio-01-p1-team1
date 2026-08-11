@@ -7,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.log_store import add_log
 from app.exceptions.handlers import register_exception_handlers
 from app.routers.admin_router import admin_router
+from app.routers.chat_router import chat_router
 from app.routers.favorite_router import favorite_router
+from app.routers.guide_router import guide_router
 from app.routers.listing_router import listing_router
 from app.routers.log_router import log_router
 from app.routers.location_router import location_router
@@ -48,6 +50,14 @@ tags_metadata = [
     {
         "name": "Log",
         "description": "실시간 요청 로그 조회 API (메모리 buffer + warning/error는 Supabase에도 저장)",
+    },
+    {
+        "name": "Chat",
+        "description": "AI 상담 챗봇 - 질의응답, 상담 이력, 상담 요약 저장/조회",
+    },
+    {
+        "name": "AI Guide",
+        "description": "AI 안내원 - 세션 내에서만 유지되는 1회성 질의응답",
     },
 ]
 
@@ -129,3 +139,5 @@ app.include_router(listing_router)
 app.include_router(favorite_router)
 app.include_router(log_router)
 app.include_router(location_router)
+app.include_router(chat_router)
+app.include_router(guide_router)

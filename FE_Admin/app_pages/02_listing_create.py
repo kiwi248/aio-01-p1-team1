@@ -14,8 +14,9 @@ from core.image_gallery import (
     describe_size,
     rows_of,
 )
+from core.ui import page_header
 
-st.title("청약정보 등록")
+page_header("📝", "청약정보 등록", "새 공고를 등록하고 사진을 첨부하세요.")
 
 if not is_logged_in():
     st.warning("로그인이 필요합니다.")

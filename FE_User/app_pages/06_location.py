@@ -1,3 +1,5 @@
+"""등록된 청약 공고를 검색하고 주변 생활권을 지도에 표시하는 화면입니다."""
+
 import unicodedata
 
 import streamlit as st
@@ -8,6 +10,7 @@ from clients.location_client import (
 )
 from core.api_client import BackendAPIError
 from core.location_map import build_location_deck
+from core.ui import page_header
 from core.listing_view import (
     address_line,
     description_lines,
@@ -140,10 +143,11 @@ def show_listing_detail(listing: dict) -> None:
         )
 
 
-st.title("생활권 분석")
-st.caption(
+page_header(
+    "🚇",
+    "주변생활권 분석",
     "청약정보에 등록된 공고명 또는 공고주소를 검색하면 "
-    "주변 지하철역·마트·병원 정보를 알려드립니다."
+    "주변 지하철역·마트·병원 정보를 알려드립니다.",
 )
 
 

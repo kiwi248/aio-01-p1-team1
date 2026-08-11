@@ -12,6 +12,8 @@ def init_state(
     stored_user_id: str = "",
     stored_email: str = "",
 ) -> None:
+    """로그인 정보와 토큰을 Streamlit 세션에 기본값으로 준비합니다."""
+
     st.session_state.setdefault("loginout", stored_loginout)
     st.session_state.setdefault("user_id", stored_user_id)
     st.session_state.setdefault("email", stored_email)
@@ -59,6 +61,7 @@ def restore_login(stored_values: object) -> str:
 
     return "restored"
 
+
 def sign_up(
     email: str,
     password: str,
@@ -67,6 +70,8 @@ def sign_up(
     birth_date: str,
     interests: list[str],
 ) -> None:
+    """Supabase Auth에 사용자를 등록하고 부가정보를 메타데이터로 저장합니다."""
+
     supabase = get_supabase()
 
     try:
@@ -95,6 +100,8 @@ def sign_up(
 
 
 def login(email: str, password: str) -> bool:
+    """이메일로 로그인하고 사용자 정보와 인증 토큰을 세션에 저장합니다."""
+
     supabase = get_supabase()
 
     try:
@@ -114,6 +121,8 @@ def login(email: str, password: str) -> bool:
 
 
 def logout() -> None:
+    """세션의 로그인 정보와 토큰을 지우고 자동 복원을 차단합니다."""
+
     st.session_state.loginout = "logout"
     st.session_state.user_id = ""
     st.session_state.email = ""
@@ -125,10 +134,14 @@ def logout() -> None:
 
 
 def is_logged_in() -> bool:
+    """현재 Streamlit 세션이 로그인 상태인지 반환합니다."""
+
     return st.session_state.loginout == "login"
 
 
 def change_password(new_password: str) -> bool:
+    """현재 인증 토큰으로 Supabase 세션을 복원한 뒤 비밀번호를 변경합니다."""
+
     supabase = get_supabase()
 
     try:

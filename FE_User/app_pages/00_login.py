@@ -3,6 +3,7 @@
 import streamlit as st
 
 from core.auth import is_logged_in, login
+from core.ui import page_header
 
 
 EMAIL_DOMAINS = [
@@ -21,8 +22,7 @@ if is_logged_in():
 left_space, login_area, right_space = st.columns([1, 2, 1])
 
 with login_area:
-    st.title("로그인")
-    st.caption("가입할 때 사용한 이메일과 비밀번호를 입력해 주세요.")
+    page_header("🔐", "로그인", "가입할 때 사용한 이메일과 비밀번호를 입력해 주세요.")
 
     email_col, domain_col = st.columns([2, 1])
 
