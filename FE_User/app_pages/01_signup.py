@@ -1,4 +1,4 @@
-# 01_signup.py
+"""약관 동의와 사용자 정보를 입력받아 회원가입을 처리하는 화면입니다."""
 
 from datetime import date
 import streamlit as st

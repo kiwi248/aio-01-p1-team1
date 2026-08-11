@@ -1,3 +1,5 @@
+"""등록된 청약 공고를 검색하고 주변 생활권을 지도에 표시하는 화면입니다."""
+
 import unicodedata
 
 import streamlit as st

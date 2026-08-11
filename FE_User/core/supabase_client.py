@@ -49,6 +49,8 @@ def get_required_env(name: str) -> str:
 
 
 def get_supabase() -> Client:
+    """검증된 URL과 anon key로 프런트엔드용 Supabase 클라이언트를 만듭니다."""
+
     url = get_required_env("SUPABASE_URL")
     anon_key = get_required_env("SUPABASE_ANON_KEY")
     return create_client(url, anon_key)
