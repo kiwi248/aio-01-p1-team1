@@ -1,128 +1,12 @@
 # favorite_service.py
-import os
-from pathlib import Path
-
-import httpx
-from dotenv import load_dotenv
-
 from app.core.supabase_config import get_supabase
 from app.schemas.favorite_schema import (
-    FavoriteCoordinate,
     FavoriteCreate,
     FavoriteDetail,
     FavoritePublic,
     FavoriteRanking,
     FavoriteWithListing,
 )
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-ENV_PATH = PROJECT_ROOT / ".env"
-KAKAO_ADDRESS_SEARCH_URL = "https://dapi.kakao.com/v2/local/search/address.json"
-KAKAO_REQUEST_TIMEOUT = 10.0
-
-
-class KakaoGeocodingError(Exception):
-    """카카오 주소 검색 API 호출 자체가 실패했을 때 사용합니다."""
-
-
-def get_kakao_rest_api_key() -> str:
-    """BE/.env에서 카카오 REST API 키를 읽습니다."""
-
-    load_dotenv(ENV_PATH)
-    value = os.getenv("KAKAO_REST_API_KEY", "").strip()
-    if not value:
-        raise KakaoGeocodingError(
-            f"KAKAO_REST_API_KEY 값이 없습니다. {ENV_PATH} 파일을 확인하세요."
-        )
-    if value.startswith("your-"):
-        raise KakaoGeocodingError("KAKAO_REST_API_KEY 값이 예시 값입니다.")
-    return value
-
-
-def address_to_coordinates(
-    address: str,
-    rest_api_key: str,
-) -> tuple[float, float] | None:
-    """주소를 WGS84 경도, 위도 순서로 변환합니다."""
-
-    query = address.strip()
-    if not query:
-        return None
-
-    # 현재 DB에는 '강남구'처럼 서울 자치구만 저장될 수 있어 검색 범위를 보완합니다.
-    if not query.startswith(("서울", "서울특별시")):
-        query = f"서울특별시 {query}"
-
-    try:
-        response = httpx.get(
-            KAKAO_ADDRESS_SEARCH_URL,
-            headers={"Authorization": f"KakaoAK {rest_api_key}"},
-            params={"query": query, "analyze_type": "similar", "size": 1},
-            timeout=KAKAO_REQUEST_TIMEOUT,
-        )
-        response.raise_for_status()
-    except httpx.HTTPStatusError as error:
-        if error.response.status_code in (401, 403):
-            message = "카카오 REST API 키가 올바르지 않거나 사용할 권한이 없습니다."
-        else:
-            message = f"카카오 주소 검색 API가 {error.response.status_code} 오류를 반환했습니다."
-        raise KakaoGeocodingError(message) from error
-    except httpx.RequestError as error:
-        raise KakaoGeocodingError("카카오 주소 검색 API에 연결할 수 없습니다.") from error
-
-    try:
-        documents = response.json().get("documents") or []
-    except (ValueError, AttributeError) as error:
-        raise KakaoGeocodingError("카카오 주소 검색 API 응답 형식이 올바르지 않습니다.") from error
-
-    if not documents:
-        return None
-
-    try:
-        first = documents[0]
-        return float(first["x"]), float(first["y"])
-    except (KeyError, TypeError, ValueError) as error:
-        raise KakaoGeocodingError("카카오 주소 검색 결과에 좌표가 없습니다.") from error
-
-
-def favorite_get_coordinates(user_id: str) -> list[FavoriteCoordinate]:
-    """사용자의 즐겨찾기 주소를 경도와 위도로 변환해 반환합니다.
-
-    좌표는 응답에만 포함하며 Supabase에는 저장하지 않습니다. 같은 주소는 한 요청에서
-    한 번만 변환해 외부 API 호출을 줄입니다.
-    """
-
-    favorites = favorite_get_mypage(user_id)
-    if not favorites:
-        return []
-
-    rest_api_key = get_kakao_rest_api_key()
-    coordinate_by_detail_address: dict[str, tuple[float, float] | None] = {}
-    results: list[FavoriteCoordinate] = []
-
-    for favorite in favorites:
-        detail_address = (favorite.listing.detail_address or favorite.listing.location or "").strip()
-        if not detail_address:
-            continue
-        if detail_address not in coordinate_by_detail_address:
-            coordinate_by_detail_address[detail_address] = address_to_coordinates(
-                detail_address,
-                rest_api_key,
-            )
-
-        coordinates = coordinate_by_detail_address[detail_address]
-        longitude, latitude = coordinates if coordinates is not None else (None, None)
-        results.append(
-            FavoriteCoordinate(
-                listing_id=favorite.listing_id,
-                title=favorite.listing.title,
-                location=detail_address,
-                longitude=longitude,
-                latitude=latitude,
-            )
-        )
-
-    return results
 
 
 def favorite_create(favorite: FavoriteCreate) -> FavoritePublic | None:

@@ -16,6 +16,14 @@ from clients.listing_client import (
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
 from core.constants import SEOUL_DISTRICTS
+from core.bulk_delete import (
+    can_delete,
+    checkbox_key,
+    names_of,
+    picked_ids,
+    set_all,
+    summarize_deletes,
+)
 from core.image_delete import summarize_result
 from core.image_gallery import (
     MAX_IMAGE_COUNT,
@@ -172,6 +180,51 @@ def confirm_one_image_delete(listing_id: int, images: list[str], target: str) ->
                 return
 
             st.session_state.image_delete_message = message
+            st.rerun()
+
+
+@st.dialog("선택한 공고 삭제 확인")
+def confirm_bulk_delete(chosen: list[int], listings: list) -> None:
+    """고른 공고를 지우기 전에 무엇을 지우는지 보여 줍니다.
+
+    지우는 일은 되돌릴 수 없어, 이름을 하나씩 늘어놓고 다시 묻습니다.
+    여기서 삭제를 고르기 전까지는 서버에 아무것도 보내지 않습니다.
+    """
+
+    st.write(f"아래 {len(chosen)}건을 삭제하시겠습니까?")
+    st.warning("삭제한 청약정보와 사진은 복구할 수 없습니다.")
+
+    with st.container(height=220, border=True):
+        for line in names_of(chosen, listings):
+            st.caption(line)
+
+    cancel_column, delete_column = st.columns(2)
+
+    with cancel_column:
+        if st.button("취소", use_container_width=True, key="bulk-delete-cancel"):
+            st.rerun()
+
+    with delete_column:
+        if st.button(
+            "삭제", type="primary", use_container_width=True, key="bulk-delete-confirm"
+        ):
+            succeeded, failed = [], []
+            progress = st.progress(0.0, text="삭제하는 중...")
+
+            for done, listing_id in enumerate(chosen, start=1):
+                try:
+                    response = delete_listing(listing_id)
+                    ok, _ = summarize_result(response)
+                    (succeeded if ok else failed).append(listing_id)
+                except BackendAPIError:
+                    failed.append(listing_id)
+                progress.progress(done / len(chosen), text=f"{done}/{len(chosen)}건 처리")
+
+            # 지운 공고는 선택에서 뺍니다. 실패한 것만 남겨 다시 시도할 수 있게 합니다.
+            # 지운 공고의 선택칸을 끕니다. 실패한 것은 켜 두어 다시 시도할 수 있게 합니다.
+            for listing_id in succeeded:
+                st.session_state[checkbox_key(listing_id)] = False
+            st.session_state.listing_message = summarize_deletes(succeeded, failed)
             st.rerun()
 
 
@@ -340,6 +393,35 @@ def show_listing_list() -> None:
             f"총 {total_count}건  |  {page} / {total_pages} 페이지 ({current_sort_label})"
         )
 
+    page_ids = [listing["id"] for listing in listings]
+
+    # 고른 상태는 선택칸에서만 읽습니다. 따로 적어 두지 않아 어긋날 일이 없습니다.
+    chosen = picked_ids(st.session_state, page_ids)
+    allowed, reason = can_delete(chosen)
+
+    select_column, clear_column, delete_column = st.columns([1, 1, 1])
+
+    if select_column.button("전체 선택", use_container_width=True, key="bulk-select-all"):
+        set_all(st.session_state, page_ids, True)
+        st.rerun()
+
+    if clear_column.button("선택 해제", use_container_width=True, key="bulk-clear"):
+        set_all(st.session_state, page_ids, False)
+        st.rerun()
+
+    if delete_column.button(
+        f"선택 삭제 ({len(chosen)})",
+        type="primary",
+        use_container_width=True,
+        disabled=not allowed,
+        key="bulk-delete-open",
+    ):
+        # 누르면 확인 창만 뜹니다. 이 버튼만으로는 아무것도 지워지지 않습니다.
+        confirm_bulk_delete(chosen, listings)
+
+    if chosen:
+        st.caption(f":gray[{len(chosen)}건 선택됨 · 이 페이지에서 고른 공고만 지웁니다.]")
+
     for listing in listings:
         with st.container(border=True):
             # 같은 공고 안에 주택형이 여러 개라 공고명이 전부 같습니다.
@@ -347,6 +429,12 @@ def show_listing_list() -> None:
             text_column, image_column = st.columns([3, 1], vertical_alignment="top")
 
             with text_column:
+                # 선택칸이 상태를 직접 들고 있습니다.
+                # 여기서 화면을 다시 그리라고 하지 않습니다.
+                # 중간에 멈추면 아직 안 그린 아래 카드들의 선택이 사라져,
+                # 하나를 풀었는데 나머지까지 줄줄이 풀립니다.
+                st.checkbox("선택", key=checkbox_key(listing["id"]))
+
                 st.markdown(f"#### {card_title(listing)}")
                 st.caption(f"#{listing['id']}  ·  {listing.get('title') or ''}")
 
