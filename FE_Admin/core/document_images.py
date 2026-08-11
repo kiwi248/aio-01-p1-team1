@@ -59,16 +59,16 @@ def looks_like_photo(width: int, height: int, size_bytes: int, mode: str = "") -
     return size_bytes >= MIN_BYTES
 
 
-def _describe(data: bytes) -> tuple[int, int, str]:
-    """그림의 가로, 세로, 색 방식을 알아냅니다. 읽을 수 없으면 0입니다."""
+def _describe(data: bytes) -> tuple[int, int, str, str]:
+    """그림의 크기·색 방식·MIME 형식을 알아냅니다."""
 
     try:
         from PIL import Image
 
         with Image.open(io.BytesIO(data)) as image:
-            return image.width, image.height, image.mode
+            return image.width, image.height, image.mode, image.get_format_mimetype()
     except Exception:
-        return 0, 0, ""
+        return 0, 0, "", ""
 
 
 def extract_from_pdf(data: bytes) -> list[dict]:
@@ -88,7 +88,7 @@ def extract_from_pdf(data: bytes) -> list[dict]:
 
         for order, item in enumerate(images, start=1):
             raw = item.data
-            width, height, mode = _describe(raw)
+            width, height, mode, mime_type = _describe(raw)
             if not looks_like_photo(width, height, len(raw), mode):
                 continue
             found.append(
@@ -98,6 +98,7 @@ def extract_from_pdf(data: bytes) -> list[dict]:
                     "width": width,
                     "height": height,
                     "page": page_number,
+                    "mime_type": mime_type,
                 }
             )
 
@@ -126,7 +127,7 @@ def extract_from_hwpx(data: bytes) -> list[dict]:
 
         for order, name in enumerate(names, start=1):
             raw = archive.read(name)
-            width, height, mode = _describe(raw)
+            width, height, mode, mime_type = _describe(raw)
             if not looks_like_photo(width, height, len(raw), mode):
                 continue
             found.append(
@@ -137,6 +138,7 @@ def extract_from_hwpx(data: bytes) -> list[dict]:
                     "height": height,
                     "page": None,
                     "order": order,
+                    "mime_type": mime_type,
                 }
             )
 
@@ -160,6 +162,7 @@ def extract_images(data: bytes, filename: str) -> list[dict]:
       width  - 가로 픽셀
       height - 세로 픽셀
       page   - 몇 쪽에서 나왔는지 (HWPX는 None)
+      mime_type - 실제 그림 형식 (예: image/jpeg)
     """
 
     if is_hwpx(filename):

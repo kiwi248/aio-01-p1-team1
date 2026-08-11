@@ -7,7 +7,9 @@
 """
 
 import json
+import mimetypes
 import time
+from pathlib import Path
 
 from core.gemini_config import get_api_key, get_model_name
 
@@ -23,6 +25,15 @@ RETRY_WAITS = (5, 15, 30)
 
 # 다시 시도해 볼 만한 오류입니다. 잘못된 요청은 다시 보내도 같은 결과입니다.
 RETRYABLE_CODES = (429, 500, 502, 503, 504)
+
+IMAGE_MIME_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".bmp": "image/bmp",
+}
 
 
 def describe_call_error(error: Exception, api_key: str = "") -> str:
@@ -220,6 +231,28 @@ IDENTIFY_SCHEMA = {
 }
 
 
+def image_mime_type(image: dict) -> str:
+    """추출 단계가 확인한 실제 MIME 형식을 Gemini 요청에 사용합니다.
+
+    이전 실행에서 세션에 남은 이미지처럼 mime_type이 없는 경우에는
+    파일 확장자로 추정하고, 그것도 알 수 없을 때만 PNG로 처리합니다.
+    """
+
+    detected = str(image.get("mime_type") or "").strip().lower()
+    if detected.startswith("image/"):
+        return detected
+
+    name = str(image.get("name") or "")
+    known = IMAGE_MIME_TYPES.get(Path(name).suffix.lower())
+    if known:
+        return known
+
+    guessed, _ = mimetypes.guess_type(name)
+    if guessed and guessed.startswith("image/"):
+        return guessed
+    return "image/png"
+
+
 def identify_images(images: list) -> list[dict]:
     """사진마다 어느 주택 것인지, 무슨 사진인지 알아냅니다.
 
@@ -252,7 +285,10 @@ def identify_images(images: list) -> list[dict]:
     try:
         client = genai.Client(api_key=api_key)
         parts = [
-            types.Part.from_bytes(data=image["data"], mime_type="image/png")
+            types.Part.from_bytes(
+                data=image["data"],
+                mime_type=image_mime_type(image),
+            )
             for image in images
         ]
         response = client.models.generate_content(

@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from clients import gemini_client
-from clients.gemini_client import GeminiError, parse_extract_response
+from clients.gemini_client import GeminiError, image_mime_type, parse_extract_response
 
 
 SAMPLE = '[{"housing_name": "방화동원룸 13㎡형", "deposit": 10260000}]'
@@ -80,6 +80,19 @@ class PromptTest(unittest.TestCase):
 
     def test_값을_지어내지_말라고_알린다(self):
         self.assertIn("지어내지", gemini_client.EXTRACT_PROMPT)
+
+
+class ImageMimeTypeTest(unittest.TestCase):
+    def test_추출_단계가_확인한_형식을_우선한다(self):
+        image = {"name": "잘못된이름.png", "mime_type": "image/jpeg"}
+
+        self.assertEqual(image_mime_type(image), "image/jpeg")
+
+    def test_형식이_없으면_파일_확장자로_추정한다(self):
+        self.assertEqual(image_mime_type({"name": "사진.webp"}), "image/webp")
+
+    def test_아무_정보도_없으면_PNG로_처리한다(self):
+        self.assertEqual(image_mime_type({}), "image/png")
 
 
 if __name__ == "__main__":

@@ -41,6 +41,21 @@ def make_png(width: int, height: int, color=(200, 120, 40)) -> bytes:
     return buffer.getvalue()
 
 
+def make_jpeg(width: int, height: int, color=(200, 120, 40)) -> bytes:
+    """시험용 JPEG 그림을 만듭니다."""
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    image = Image.new("RGB", (width, height), color)
+    pixels = image.load()
+    for x in range(0, width, 3):
+        for y in range(0, height, 3):
+            pixels[x, y] = ((x * 7) % 256, (y * 11) % 256, (x + y) % 256)
+    image.save(buffer, format="JPEG", quality=95)
+    return buffer.getvalue()
+
+
 def make_hwpx(files: dict) -> bytes:
     """BinData에 그림이 든 HWPX(=ZIP)를 흉내 냅니다."""
     buffer = io.BytesIO()
@@ -166,6 +181,16 @@ class ExtractFromHwpxTest(unittest.TestCase):
         data = make_hwpx({"BinData/image1.png": make_png(800, 600)})
 
         self.assertIsNone(extract_from_hwpx(data)[0]["page"])
+
+    def test_실제_그림의_MIME_형식을_함께_돌려준다(self):
+        data = make_hwpx({"BinData/image1.png": make_png(800, 600)})
+
+        self.assertEqual(extract_from_hwpx(data)[0]["mime_type"], "image/png")
+
+    def test_파일명이_틀려도_실제_JPEG_형식을_알아낸다(self):
+        data = make_hwpx({"BinData/image1.png": make_jpeg(800, 600)})
+
+        self.assertEqual(extract_from_hwpx(data)[0]["mime_type"], "image/jpeg")
 
     def test_확장자로_형식을_골라_꺼낸다(self):
         data = make_hwpx({"BinData/image1.png": make_png(800, 600)})
