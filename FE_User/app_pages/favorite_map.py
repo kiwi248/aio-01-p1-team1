@@ -1,67 +1,130 @@
-import os
-from pathlib import Path
-
-import httpx
-import pandas as pd
+import pydeck as pdk
 import streamlit as st
-from dotenv import load_dotenv
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-ENV_PATH = PROJECT_ROOT / ".env"
-KAKAO_ADDRESS_SEARCH_URL = "https://dapi.kakao.com/v2/local/search/address.json"
+from clients.location_client import geocode_location
+from core.api_client import BackendAPIError
 
-
-def get_kakao_rest_api_key() -> str:
-    """배포 환경은 secrets, 로컬 환경은 FE_User/.env에서 REST API 키를 읽습니다."""
-
-    try:
-        value = st.secrets["KAKAO_REST_API_KEY"]
-    except Exception:
-        load_dotenv(ENV_PATH)
-        value = os.getenv("KAKAO_REST_API_KEY", "")
-    return (value or "").strip()
+MAP_STYLE = (
+    "https://basemaps.cartocdn.com/gl/positron-gl-style/"
+    "style.json"
+)
+DEFAULT_MAP_LATITUDE = 37.5665
+DEFAULT_MAP_LONGITUDE = 126.9780
 
 
 @st.cache_data(show_spinner=False)
-def geocode_address(address: str, rest_api_key: str) -> tuple[float, float] | None:
-    """카카오 주소 검색 REST API로 주소를 위도와 경도로 변환합니다."""
+def geocode_favorite_address(address: str) -> tuple[float, float] | None:
+    """백엔드 위치 API를 통해 즐겨찾기 주소를 지도 좌표로 변환합니다."""
 
-    response = httpx.get(
-        KAKAO_ADDRESS_SEARCH_URL,
-        params={"query": address},
-        headers={"Authorization": f"KakaoAK {rest_api_key}"},
-        timeout=5.0,
-    )
-    response.raise_for_status()
+    response = geocode_location(address)
+    location = response.get("data") or {}
+    latitude = location.get("latitude")
+    longitude = location.get("longitude")
 
-    documents = response.json().get("documents") or []
-    if not documents:
+    if latitude is None or longitude is None:
         return None
 
-    first_result = documents[0]
-    return float(first_result["y"]), float(first_result["x"])
+    return float(latitude), float(longitude)
 
 
-def render_favorite_map(favorites: list[dict], rest_api_key: str) -> None:
-    """즐겨찾기 공고 주소를 좌표로 변환해 지도에 표시합니다."""
+def build_favorite_deck(points: list[dict]) -> pdk.Deck:
+    """좌표가 없어도 기본 지도를 만들고, 좌표가 있으면 모든 위치에 핀을 표시합니다."""
 
-    if not rest_api_key or rest_api_key.startswith("your-"):
-        st.info("지도를 표시하려면 FE_User/.env에 KAKAO_REST_API_KEY를 설정해 주세요.")
-        return
+    if points:
+        latitude = sum(point["latitude"] for point in points) / len(points)
+        longitude = sum(point["longitude"] for point in points) / len(points)
+
+        latitude_span = max(point["latitude"] for point in points) - min(
+            point["latitude"] for point in points
+        )
+        longitude_span = max(point["longitude"] for point in points) - min(
+            point["longitude"] for point in points
+        )
+        coordinate_span = max(latitude_span, longitude_span)
+
+        if len(points) == 1:
+            zoom = 13
+        elif coordinate_span >= 5:
+            zoom = 5
+        elif coordinate_span >= 2:
+            zoom = 6
+        elif coordinate_span >= 1:
+            zoom = 7
+        elif coordinate_span >= 0.5:
+            zoom = 8
+        elif coordinate_span >= 0.2:
+            zoom = 9
+        else:
+            zoom = 11
+    else:
+        latitude = DEFAULT_MAP_LATITUDE
+        longitude = DEFAULT_MAP_LONGITUDE
+        zoom = 9
+
+    layers = []
+    if points:
+        layers.append(
+            pdk.Layer(
+                "ScatterplotLayer",
+                data=points,
+                get_position="[longitude, latitude]",
+                get_fill_color=[229, 57, 53],
+                get_line_color=[255, 255, 255],
+                get_radius=120,
+                radius_min_pixels=9,
+                radius_max_pixels=18,
+                line_width_min_pixels=2,
+                stroked=True,
+                pickable=True,
+                auto_highlight=True,
+            )
+        )
+
+    return pdk.Deck(
+        map_style=MAP_STYLE,
+        initial_view_state=pdk.ViewState(
+            latitude=latitude,
+            longitude=longitude,
+            zoom=zoom,
+            pitch=0,
+        ),
+        layers=layers,
+        tooltip={
+            "html": "<b>{title}</b><br/>{location}",
+            "style": {
+                "backgroundColor": "#263238",
+                "color": "white",
+            },
+        },
+    )
+
+
+def render_favorite_map(favorites: list[dict]) -> None:
+    """기본 지도를 먼저 띄우고 즐겨찾기 주소 전체를 핀으로 표시합니다."""
 
     points = []
     failed_locations = []
+    map_placeholder = st.empty()
+
+    map_placeholder.pydeck_chart(
+        build_favorite_deck(points),
+        use_container_width=True,
+    )
 
     with st.spinner("즐겨찾기 위치를 찾는 중입니다..."):
         for favorite in favorites:
             listing = favorite.get("listing") or {}
-            location = (listing.get("detail_address") or listing.get("location") or "").strip()
+            location = (
+                listing.get("detail_address")
+                or listing.get("location")
+                or ""
+            ).strip()
             if not location:
                 continue
 
             try:
-                coordinates = geocode_address(location, rest_api_key)
-            except (httpx.HTTPError, KeyError, TypeError, ValueError):
+                coordinates = geocode_favorite_address(location)
+            except (BackendAPIError, KeyError, TypeError, ValueError):
                 failed_locations.append(location)
                 continue
 
@@ -79,15 +142,15 @@ def render_favorite_map(favorites: list[dict], rest_api_key: str) -> None:
                 }
             )
 
-    if not points:
-        st.info("지도에 표시할 수 있는 위치 정보가 없습니다.")
-        return
-
-    map_data = pd.DataFrame(points)
-    st.map(
-        map_data,
+    map_placeholder.pydeck_chart(
+        build_favorite_deck(points),
         use_container_width=True,
     )
+
+    if points:
+        st.caption(f"즐겨찾기 위치 {len(points)}건을 지도에 표시했습니다.")
+    else:
+        st.info("지도에 표시할 수 있는 즐겨찾기 주소가 없습니다.")
 
     if failed_locations:
         st.caption(f"좌표를 찾지 못한 위치: {len(failed_locations)}건")
