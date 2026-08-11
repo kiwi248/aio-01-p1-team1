@@ -1,4 +1,4 @@
-# 04_mypage.py
+"""로그인 사용자의 프로필과 비밀번호를 조회·수정하는 화면입니다."""
 
 import streamlit as st
 

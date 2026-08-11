@@ -44,7 +44,7 @@ home_page = st.Page("app_pages/02_home.py", title="홈", icon="🏠", default=Tr
 login_page = st.Page("app_pages/00_login.py", title="로그인", icon="🔐")
 signup_page = st.Page("app_pages/01_signup.py", title="회원가입", icon="📝")
 listings_page = st.Page("app_pages/03_listings.py", title="청약정보 조회", icon="📋")
-location_page = st.Page("app_pages/06_location.py",title="생활권 분석",icon="🚇")
+location_page = st.Page("app_pages/06_location.py",title="주변생활권 분석",icon="🚇")
 mypage_page = st.Page("app_pages/04_mypage.py", title="My Page", icon="⭐")
 favorite_page = st.Page("app_pages/05_favorite.py", title="즐겨찾기", icon="❤️")
 
@@ -103,18 +103,18 @@ if restore_status == "invalid":
 
 with st.sidebar:
     st.title("메뉴")
-    st.page_link(home_page)
-    st.page_link(listings_page)
-    st.page_link(location_page)
+    st.page_link(home_page, icon="🏠")
+    st.page_link(listings_page, icon="📋")
+    st.page_link(location_page, icon="🚇")
 
     if is_logged_in():
-        st.page_link(favorite_page)
-        st.page_link(mypage_page)
+        st.page_link(favorite_page, icon="⭐")
+        st.page_link(mypage_page, icon="🗂️")
         st.divider()
         st.caption(f"{st.session_state.email} 님")
         st.button("LOGOUT", on_click=logout, use_container_width=True)
     else:
-        st.page_link(login_page)
+        st.page_link(login_page, icon="🔐")
 
 
 navigation.run()
