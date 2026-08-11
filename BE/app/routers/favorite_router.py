@@ -17,7 +17,6 @@ favorite_router = APIRouter(prefix="/favorites", tags=["Favorite"])
 # 409: 중복 즐겨찾기
 # 500: 서버 또는 DB 처리 실패
 
-# 1. mypage 즐겨찾기 등록
 @favorite_router.post("/create")
 def create(favorite: FavoriteCreate) -> ApiResponse:
     if favorite_get_by_user_and_listing(favorite.user_id, favorite.listing_id):

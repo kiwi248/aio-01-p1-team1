@@ -1,11 +1,44 @@
 """백엔드(FastAPI) API에서 공통으로 사용하는 HTTP 요청 기능입니다."""
-
+import os
+from pathlib import Path
 from typing import Any
 
 import httpx
+import streamlit as st
+from dotenv import load_dotenv
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+ENV_PATH = PROJECT_ROOT / ".env"
+
+def _get_backend_url() -> str:
+    """로컬 .env를 먼저 확인하고, 없으면 배포 secrets를 읽습니다."""
+
+    load_dotenv(ENV_PATH)
+
+    backend_url = os.getenv("BACKEND_URL", "").strip()
+
+    if backend_url:
+        return backend_url.rstrip("/")
+
+    # 로컬 .env 파일이 존재하면 로컬 백엔드 기본 주소를 사용합니다.
+    # 이때 st.secrets에 접근하지 않아 불필요한 경고를 막습니다.
+    if ENV_PATH.exists():
+        return "http://127.0.0.1:8000"
+
+    try:
+        backend_url = str(
+            st.secrets["BACKEND_URL"]
+        ).strip()
+    except Exception:
+        backend_url = ""
+
+    return (
+        backend_url.rstrip("/")
+        or "http://127.0.0.1:8000"
+    )
 
 
-BACKEND_URL = "http://127.0.0.1:8000"
+BACKEND_URL = _get_backend_url()
 REQUEST_TIMEOUT = 15.0
 
 

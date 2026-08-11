@@ -6,10 +6,10 @@ import streamlit as st
 from clients.favorite_client import get_favorite_ranking
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
+from core.ui import page_header
 
 
-st.title("즐겨찾기 많은 순 조회")
-st.caption("유저가 즐겨찾기한 청약정보를 즐겨찾기 많은 순으로 보여줍니다.")
+page_header("⭐", "즐겨찾기 많은 순 조회", "유저가 즐겨찾기한 청약정보를 많은 순으로 보여줍니다.")
 
 if not is_logged_in():
     st.warning("로그인이 필요합니다.")
