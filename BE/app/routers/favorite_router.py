@@ -4,10 +4,8 @@ from fastapi import APIRouter, HTTPException
 from app.core.api_response import ApiResponse
 from app.schemas.favorite_schema import FavoriteCreate
 from app.services.favorite_service import (
-    KakaoGeocodingError,
     favorite_create,
     favorite_delete,
-    favorite_get_coordinates,
     favorite_get_by_user_and_listing,
     favorite_get_mypage,
 )
@@ -45,22 +43,7 @@ def mypage(user_id: str) -> ApiResponse:
     )
 
 
-# 3. mypage 즐겨찾기 주소를 경도/위도로 변환
-@favorite_router.get("/mypage/{user_id}/coordinates")
-def coordinates(user_id: str) -> ApiResponse:
-    try:
-        converted = favorite_get_coordinates(user_id)
-    except KakaoGeocodingError as error:
-        raise HTTPException(status_code=502, detail=str(error)) from error
-
-    return ApiResponse(
-        success=True,
-        message="즐겨찾기 주소를 경도와 위도로 변환했습니다.",
-        data=converted,
-    )
-
-
-# 4. mypage 즐겨찾기 삭제
+# 3. mypage 즐겨찾기 삭제
 @favorite_router.delete("/delete/{user_id}/{listing_id}")
 def delete(user_id: str, listing_id: int) -> ApiResponse:
     current_favorite = favorite_get_by_user_and_listing(user_id, listing_id)
