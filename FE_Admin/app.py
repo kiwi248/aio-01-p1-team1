@@ -10,16 +10,26 @@
 """
 
 import streamlit as st
-from streamlit_session_browser_storage import SessionStorage
 
-from core.auth import init_state, is_logged_in, logout
-
-
+# set_page_config()는 이 앱에서 가장 먼저 실행되는 Streamlit 명령이어야 합니다.
+# 그래서 다른 import보다 위에 둡니다. 보통은 import를 파일 맨 위에 모으지만
+# 여기서는 순서가 곧 동작이라 예외로 둡니다.
+#
+# core.auth를 먼저 불러오면 core.api_client가 딸려 오는데,
+# 그 모듈은 읽히는 순간 st.secrets를 확인합니다.
+# 로컬에는 secrets.toml이 없어서, Streamlit 버전에 따라 이때
+# "No secrets found" 안내를 화면에 그려 버립니다.
+# 그러면 아래 set_page_config()가 첫 번째 명령이 아니게 되어
+# StreamlitSetPageConfigMustBeFirstCommandError로 앱이 뜨지 않습니다.
 st.set_page_config(
     page_title="관리자 페이지",
     page_icon="🛠️",
     layout="wide",
 )
+
+from streamlit_session_browser_storage import SessionStorage  # noqa: E402
+
+from core.auth import init_state, is_logged_in, logout  # noqa: E402
 
 home_page = st.Page("app_pages/01_home.py", title="홈", icon="🏠", default=True)
 login_page = st.Page("app_pages/00_login.py", title="로그인", icon="🔐")
