@@ -5,6 +5,7 @@ import streamlit as st
 from clients.profile_client import get_profile, update_profile
 from core.api_client import BackendAPIError
 from core.auth import change_password, is_logged_in
+from core.ui import page_header
 
 INTEREST_OPTIONS = [
     "입찰공고",
@@ -18,7 +19,7 @@ INTEREST_OPTIONS = [
     "주택관리",
 ]
 
-st.title("회원정보수정")
+page_header("🗂️", "회원정보수정", "닉네임과 비밀번호, 관심분야를 관리하세요.")
 
 if not is_logged_in():
     st.warning("로그인이 필요합니다.")

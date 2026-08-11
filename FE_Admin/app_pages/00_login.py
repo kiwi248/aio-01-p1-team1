@@ -3,13 +3,14 @@
 import streamlit as st
 
 from core.auth import is_logged_in, login
+from core.ui import page_header
 
 
 if is_logged_in():
     st.success("로그인에 성공했습니다.")
     st.stop()
 
-st.title("관리자 로그인")
+page_header("🔐", "관리자 로그인", "관리자 계정으로 로그인해 주세요.")
 
 with st.form("admin_login_form"):
     username = st.text_input("아이디")

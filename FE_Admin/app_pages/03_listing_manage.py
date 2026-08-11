@@ -55,6 +55,7 @@ from core.page_params import (
     parse_page,
     parse_search,
 )
+from core.ui import page_header
 
 
 # 이미지 크기 제한입니다. 백엔드에서도 같은 값으로 다시 검사합니다.
@@ -66,7 +67,7 @@ PAGE_SIZE = 10
 # 고른 정렬 기준을 담아 둘 자리입니다.
 SORT_STATE_KEY = "admin-listing-sort"
 
-st.title("청약정보 조회 / 삭제")
+page_header("📋", "청약정보 조회 / 삭제", "등록된 공고를 검색하고 대량 삭제할 수 있습니다.")
 
 if not is_logged_in():
     st.warning("로그인이 필요합니다.")

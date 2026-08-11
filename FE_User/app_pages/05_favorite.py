@@ -4,9 +4,10 @@ from app_pages.favorite_map import render_favorite_map
 from clients.favorite_client import delete_favorite, get_mypage_favorites
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
+from core.ui import page_header
 
 
-st.title("즐겨찾기 목록")
+page_header("⭐", "즐겨찾기 목록", "담아둔 청약정보를 한눈에 확인하세요.")
 
 if not is_logged_in():
     st.warning("로그인이 필요합니다.")

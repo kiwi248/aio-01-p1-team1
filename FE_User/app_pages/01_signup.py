@@ -4,6 +4,7 @@ from datetime import date
 import streamlit as st
 
 from core.auth import is_logged_in, sign_up
+from core.ui import page_header
 
 
 EMAIL_DOMAINS = [
@@ -66,8 +67,7 @@ if is_logged_in():
     st.stop()
 
 
-st.title("회원가입")
-st.caption("필수 약관에 동의한 후 회원 정보를 입력해 주세요.")
+page_header("📝", "회원가입", "필수 약관에 동의한 후 회원 정보를 입력해 주세요.")
 
 # 진행 상태를 표시합니다.
 required_agreement_count = sum(
