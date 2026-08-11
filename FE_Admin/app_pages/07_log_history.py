@@ -6,6 +6,7 @@ import streamlit as st
 from clients.log_client import get_log_history
 from core.api_client import BackendAPIError
 from core.auth import is_logged_in
+from core.timezone import to_kst_display
 from core.ui import page_header
 
 
@@ -26,8 +27,12 @@ try:
     if not logs:
         st.info("저장된 로그 이력이 없습니다.")
     else:
-        st.caption(f"총 {len(logs)}건")
-        df = pd.DataFrame(logs).rename(
+        st.caption(f"총 {len(logs)}건 · 시각은 한국시간(KST) 기준")
+        df = pd.DataFrame(logs)
+        df["time"] = df["time"].apply(to_kst_display)
+        if "created_at" in df.columns:
+            df["created_at"] = df["created_at"].apply(to_kst_display)
+        df = df.rename(
             columns={
                 "id": "ID",
                 "time": "시각",
