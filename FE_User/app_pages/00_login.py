@@ -10,7 +10,6 @@ EMAIL_DOMAINS = [
     "gmail.com",
     "daum.net",
     "kakao.com",
-    "직접 입력",
 ]
 
 
@@ -38,10 +37,7 @@ with login_area:
             EMAIL_DOMAINS,
         )
 
-    if selected_domain == "직접 입력":
-        email_domain = email_domain = selected_domain
-    else:
-        email_domain = selected_domain
+    email_domain = selected_domain
 
     password = st.text_input(
         "비밀번호",

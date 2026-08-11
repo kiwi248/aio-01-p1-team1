@@ -11,7 +11,6 @@ EMAIL_DOMAINS = [
     "gmail.com",
     "daum.net",
     "kakao.com",
-    "직접 입력",
 ]
 
 INTEREST_OPTIONS = [
@@ -150,15 +149,7 @@ with domain_col:
         key="signup_selected_domain",
     )
 
-    if selected_domain == "직접 입력":
-        email_domain = st.text_input(
-            "도메인 직접 입력",
-            placeholder="example.com",
-            key="signup_custom_domain",
-            label_visibility="collapsed",
-        )
-    else:
-        email_domain = selected_domain
+    email_domain = selected_domain
 
 password = st.text_input(
     "비밀번호",
