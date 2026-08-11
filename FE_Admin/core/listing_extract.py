@@ -107,8 +107,15 @@ def validate_extracted(item: object, districts: tuple[str, ...]) -> tuple[dict |
     payload["application_start_date"] = start.isoformat() if start else None
     payload["application_end_date"] = end.isoformat() if end else None
 
-    # 이미지는 자동 등록에서 다루지 않습니다. 사람이 확인한 뒤 따로 올립니다.
+    # 상세주소는 없어도 등록할 수 있습니다. 있으면 담고, 없으면 빈 값으로 둡니다.
+    payload["detail_address"] = _clean_text(item.get("detail_address")) or None
+
+    # 사진은 PDF에서 따로 뽑아 나중에 붙입니다.
     payload["image_url"] = None
+    payload["image_urls"] = []
+
+    # 쪽 번호는 등록 API가 받는 항목이 아니라 payload에 넣지 않습니다.
+    # 위치도와 짝지을 때만 쓰므로 원본(source)에서 읽어 씁니다.
 
     if problems:
         return None, problems

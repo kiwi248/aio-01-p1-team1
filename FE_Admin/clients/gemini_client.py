@@ -28,15 +28,45 @@ EXTRACT_PROMPT = """당신은 공공임대 청약 공고 PDF에서 등록용 정
   area_sqm: 전용면적 숫자만 (예: 13.98)
   recruitment_count: 모집 호수 숫자만
   location: 서울 자치구 이름 (예: "강서구")
+  detail_address: 그 주택의 도로명 주소 (예: "강서구 개화동로21길 49")
   deposit: 임대보증금 원 단위 숫자만
   monthly_rent: 월 임대료 원 단위 숫자만
   application_start_date: 신청 시작일 YYYY-MM-DD
   application_end_date: 신청 종료일 YYYY-MM-DD
   description: 신청자격, 소득기준, 자산기준, 공급 구성, 주의사항을 줄바꿈으로 나눈 항목형 설명
   source_url: 공고 원문 주소 (PDF에서 찾을 수 없으면 빈 문자열)
+  page: 이 주택의 위치도(지도 그림)가 실린 쪽 번호. 없으면 null
 - 값을 찾을 수 없으면 지어내지 말고 빈 문자열이나 null을 넣으세요.
 - 금액에 쉼표나 '원'을 붙이지 마세요.
+- 표에서 주택형 이름 칸이 비어 있어도 면적과 금액이 다르면 별개의 원소로 만드세요.
+  칸이 병합되어 이름이 생략된 줄을 빠뜨리지 마세요.
 """
+
+# 모델이 돌려줄 형태를 못 박아 둡니다.
+# 형식을 지정하지 않으면 항목 이름이나 자료형이 조금씩 달라져
+# 아래 확인 단계에서 걸리는 일이 생깁니다.
+EXTRACT_SCHEMA = {
+    "type": "ARRAY",
+    "items": {
+        "type": "OBJECT",
+        "properties": {
+            "title": {"type": "STRING"},
+            "housing_name": {"type": "STRING"},
+            "area_sqm": {"type": "NUMBER", "nullable": True},
+            "recruitment_count": {"type": "INTEGER", "nullable": True},
+            "location": {"type": "STRING"},
+            "detail_address": {"type": "STRING", "nullable": True},
+            "deposit": {"type": "INTEGER", "nullable": True},
+            "monthly_rent": {"type": "INTEGER", "nullable": True},
+            "application_start_date": {"type": "STRING", "nullable": True},
+            "application_end_date": {"type": "STRING", "nullable": True},
+            "description": {"type": "STRING"},
+            "source_url": {"type": "STRING", "nullable": True},
+            "page": {"type": "INTEGER", "nullable": True},
+        },
+        "required": ["title", "housing_name", "location", "description"],
+    },
+}
 
 
 def extract_listings_from_pdf(pdf_bytes: bytes, filename: str = "notice.pdf") -> list:
@@ -68,7 +98,10 @@ def extract_listings_from_pdf(pdf_bytes: bytes, filename: str = "notice.pdf") ->
                 types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
                 EXTRACT_PROMPT,
             ],
-            config={"response_mime_type": "application/json"},
+            config={
+                "response_mime_type": "application/json",
+                "response_schema": EXTRACT_SCHEMA,
+            },
         )
         text = (response.text or "").strip()
     except Exception as error:

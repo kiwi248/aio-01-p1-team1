@@ -113,10 +113,31 @@ class ValidateExtractedTest(unittest.TestCase):
             set(payload),
             {
                 "title", "housing_name", "area_sqm", "recruitment_count", "location",
-                "deposit", "monthly_rent", "application_start_date",
-                "application_end_date", "description", "image_url", "source_url",
+                "detail_address", "deposit", "monthly_rent", "application_start_date",
+                "application_end_date", "description", "image_url", "image_urls",
+                "source_url",
             },
         )
+
+    def test_쪽_번호는_등록값에_넣지_않는다(self):
+        """쪽 번호는 위치도와 짝지을 때만 쓰는 값이라 등록 API로 보내지 않습니다."""
+        payload, _ = validate_extracted(good_item(page=28), SEOUL_DISTRICTS)
+
+        self.assertNotIn("page", payload)
+
+    def test_상세주소를_담는다(self):
+        payload, _ = validate_extracted(
+            good_item(detail_address="강서구 개화동로21길 49"), SEOUL_DISTRICTS
+        )
+
+        self.assertEqual(payload["detail_address"], "강서구 개화동로21길 49")
+
+    def test_상세주소가_없어도_등록할_수_있다(self):
+        """상세주소는 선택 입력입니다. 없다고 막으면 안 됩니다."""
+        payload, problems = validate_extracted(good_item(), SEOUL_DISTRICTS)
+
+        self.assertEqual(problems, [])
+        self.assertIsNone(payload["detail_address"])
 
 
 class ValidateAllTest(unittest.TestCase):
