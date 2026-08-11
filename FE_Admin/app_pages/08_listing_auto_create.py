@@ -31,6 +31,7 @@ from core.listing_extract import (
     unreadable_fields,
     validate_all,
 )
+from core.ui import page_header
 
 
 # 공고 파일 크기 제한입니다. 너무 큰 파일은 모델이 처리하지 못합니다.
@@ -55,7 +56,11 @@ class _UploadedImage:
     def getvalue(self) -> bytes:
         return self._data
 
-st.title("청약정보 등록(자동)")
+page_header(
+    "🤖",
+    "청약정보 등록(자동)",
+    "PDF 또는 HWPX 공고에서 등록 정보를 추출하고 검토하세요.",
+)
 
 if not is_logged_in():
     st.warning("로그인이 필요합니다.")
