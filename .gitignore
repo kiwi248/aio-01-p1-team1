@@ -1,1 +1,4 @@
 .vscode/
+
+# Local listing import data
+import_data/
