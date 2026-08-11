@@ -3,3 +3,5 @@ httpx>=0.27,<1
 pandas>=1.4,<3
 streamlit-browser-session-storage==0.0.12
 google-genai>=1.0,<2
+# 공고 PDF에서 글자와 사진을 꺼낼 때 씁니다. HWPX는 표준 zipfile로 읽습니다.
+pypdf>=6,<7

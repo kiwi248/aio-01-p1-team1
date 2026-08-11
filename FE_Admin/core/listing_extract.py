@@ -123,6 +123,52 @@ def validate_extracted(item: object, districts: tuple[str, ...]) -> tuple[dict |
     return payload, []
 
 
+# 화면에서 손으로 채울 수 있는 항목입니다.
+# 모델이 못 읽은 값을 관리자가 직접 넣고 등록할 수 있게 합니다.
+FIXABLE_NUMBER_FIELDS = (
+    ("area_sqm", "면적(㎡)"),
+    ("recruitment_count", "모집 인원"),
+    ("deposit", "보증금"),
+    ("monthly_rent", "월세"),
+)
+
+FIXABLE_DATE_FIELDS = (
+    ("application_start_date", "신청 시작일"),
+    ("application_end_date", "신청 종료일"),
+)
+
+
+def unreadable_fields(item: object) -> list[str]:
+    """모델이 뽑은 값 중 숫자나 날짜로 읽을 수 없는 항목의 이름을 돌려줍니다.
+
+    화면은 이 목록을 보고 어떤 칸을 손으로 채우게 할지 정합니다.
+    """
+
+    if not isinstance(item, dict):
+        return []
+
+    bad: list[str] = []
+
+    area = _to_float(item.get("area_sqm"))
+    if area is None or area <= 0:
+        bad.append("area_sqm")
+
+    count = _to_int(item.get("recruitment_count"))
+    if count is None or count <= 0:
+        bad.append("recruitment_count")
+
+    for field in ("deposit", "monthly_rent"):
+        amount = _to_int(item.get(field))
+        if amount is None or amount < 0:
+            bad.append(field)
+
+    for field, _ in FIXABLE_DATE_FIELDS:
+        if _to_date(item.get(field)) is None:
+            bad.append(field)
+
+    return bad
+
+
 def validate_all(items: object, districts: tuple[str, ...]) -> list[dict]:
     """추출 목록 전체를 확인합니다.
 

@@ -8,7 +8,7 @@ Gemini나 서버에 연결하지 않고, 모델이 돌려줄 법한 값만 흉�
 import unittest
 
 from core.constants import SEOUL_DISTRICTS
-from core.listing_extract import summarize, validate_all, validate_extracted
+from core.listing_extract import unreadable_fields, summarize, validate_all, validate_extracted
 
 
 def good_item(**overrides) -> dict:
@@ -167,6 +167,36 @@ class SummarizeTest(unittest.TestCase):
 
     def test_빈_목록도_센다(self):
         self.assertEqual(summarize([]), {"total": 0, "ready": 0, "blocked": 0})
+
+
+
+
+class UnreadableFieldsTest(unittest.TestCase):
+    """모델이 못 읽은 칸을 화면에서 채울 수 있게, 어떤 칸인지 알려 줍니다."""
+
+    def test_다_읽었으면_빈_목록이다(self):
+        self.assertEqual(unreadable_fields(good_item()), [])
+
+    def test_모집_인원을_못_읽으면_알려_준다(self):
+        """공고문 표에서 칸이 병합되면 실제로 이런 일이 생깁니다."""
+        self.assertIn("recruitment_count", unreadable_fields(good_item(recruitment_count=None)))
+
+    def test_0이나_음수도_못_읽은_것으로_본다(self):
+        self.assertIn("recruitment_count", unreadable_fields(good_item(recruitment_count=0)))
+        self.assertIn("area_sqm", unreadable_fields(good_item(area_sqm=-1)))
+
+    def test_금액과_날짜도_확인한다(self):
+        bad = unreadable_fields(
+            good_item(deposit="", monthly_rent=None, application_end_date="언젠가")
+        )
+
+        self.assertIn("deposit", bad)
+        self.assertIn("monthly_rent", bad)
+        self.assertIn("application_end_date", bad)
+
+    def test_이상한_값도_안전하다(self):
+        self.assertEqual(unreadable_fields(None), [])
+        self.assertEqual(unreadable_fields("문자열"), [])
 
 
 if __name__ == "__main__":
